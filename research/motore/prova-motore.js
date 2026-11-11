@@ -6,6 +6,7 @@ import { RilevatoreRottura } from './rottura.js';
 import { puntiCandela } from './percorso.js';
 import { rendimentoNetto, nettoOperazione, fundingPagato, COMMISSIONE_MAKER } from './costi.js';
 import { simulaPortafoglio } from './portafoglio.js';
+import { simulaUscita, MOTIVI_USCITA } from './uscite.js';
 
 const vicino = (a, b) => Math.abs(a - b) < 1e-9;
 const iso = t => new Date(t).toISOString().slice(11, 16);
@@ -103,4 +104,37 @@ assert.equal(ris.prese[0].motivo, MOTIVI.freno); assert.equal(ris.prese[0].uscit
 assert.ok(vicino(ris.prese[0].netto, nettoOperazione(1, 0.715, { slittEntrata: 0, slittUscita: 0 })));
 // Senza freno la stessa prima operazione arriva alla sua uscita e la seconda entra
 assert.equal(simulaPortafoglio(ops, { leva: 3, slittamento: 0, prezzi, freno: 0 }).prese.length, 2);
+// Uscite sui prezzi veri: con controllo a ogni prezzo devono coincidere con Posizione sugli stessi prezzi
+{
+  let seme = 3; const rnd = () => ((seme = (seme * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let prova = 0; prova < 300; prova++) {
+    const n = 300, s = { open: new Float64Array(n), high: new Float64Array(n), low: new Float64Array(n), close: new Float64Array(n), t0: 0, n };
+    const percorsi = new Map();
+    let px = 100;
+    for (let i = 0; i < n; i++) {
+      s.open[i] = px;
+      const tick = Array.from({ length: 1 + Math.floor(rnd() * 8) }, () => (px *= 1 + (rnd() - 0.5) * 0.006));
+      s.high[i] = Math.max(s.open[i], ...tick); s.low[i] = Math.min(s.open[i], ...tick); s.close[i] = tick.at(-1);
+      if (rnd() < 0.8) percorsi.set(i * M, tick); // gli altri minuti con la candela
+    }
+    const lato = rnd() < 0.5 ? 1 : -1, u = 0.004, iE = 1;
+    const pos = new Posizione({ lato, entrata: s.open[iE], tempo: iE * M, unita: u, regole: REGOLE_ATTUALE });
+    for (let k = iE; k < n && !pos.chiusa; k++) {
+      if (k >= iE + 240) { pos.chiudiA(s.open[k], k * M, MOTIVI.tempo); break; }
+      const vero = percorsi.get(k * M);
+      if (vero) { pos.salto(s.open[k], k * M); pos.minuto(vero, k * M, -1, s.open[k]); } else pos.minuto(puntiCandela(s.open[k], s.high[k], s.low[k], s.close[k]), k * M);
+    }
+    const x = simulaUscita({ s, iE, lato, u, percorsi, r: { stop: 1.5, obiettivo: 0, attivaDa: 0.5, segue: 1, restituisci: 0.4, durata: 240, controllo: 'prezzo' } });
+    if (pos.chiusa) { assert.ok(vicino(x.uscita, pos.uscita)); assert.equal(x.tUscita, pos.tempoUscita); assert.equal(x.motivo, pos.motivo); }
+  }
+  // Obiettivo sulla borsa: long a 100, unità 1%, obiettivo 2 u → esce a 102 appena toccato
+  const s = { open: Float64Array.from([100, 100, 101]), high: Float64Array.from([100, 102.5, 101]), low: Float64Array.from([100, 99.5, 101]), close: Float64Array.from([100, 101, 101]), t0: 0, n: 3 };
+  const x = simulaUscita({ s, iE: 0, lato: 1, u: 0.01, percorsi: new Map([[M, [99.5, 102.5, 101]]]), r: { stop: 1.5, obiettivo: 2, attivaDa: 0.5, segue: 0, restituisci: 0, durata: 240, controllo: 'chiusura' } });
+  assert.equal(x.motivo, MOTIVI_USCITA.obiettivo); assert.ok(vicino(x.uscita, 102)); assert.equal(x.tUscita, M);
+  // Controllo alla chiusura: la protezione decisa a fine minuto si esegue all'apertura del minuto dopo
+  const s2 = { open: Float64Array.from([100, 100, 103, 101.5, 101]), high: Float64Array.from([100, 103.2, 103, 101.6, 101]), low: Float64Array.from([100, 100, 101.3, 101.4, 101]), close: Float64Array.from([100, 103, 101.4, 101.5, 101]), t0: 0, n: 5 };
+  const y = simulaUscita({ s: s2, iE: 0, lato: 1, u: 0.01, percorsi: null, r: { stop: 1.5, obiettivo: 0, attivaDa: 0.5, segue: 0, restituisci: 0.4, durata: 240, controllo: 'chiusura' } });
+  // migliore chiusura +3% → livello +1,8%; chiusura del minuto 2 a +1,4% → esce all'apertura del minuto 3 (101,5)
+  assert.equal(y.motivo, MOTIVI_USCITA.protezione); assert.equal(y.tUscita, 3 * M); assert.ok(vicino(y.uscita, 101.5));
+}
 console.log('Motore: tutti i controlli passati.');

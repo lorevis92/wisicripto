@@ -8,7 +8,9 @@
 //   3. Controlla che massimo e minimo dei prezzi veri coincidano con quelli delle candele.
 // Uscita: data/aggtrades/<SIMBOLO>.json { "tempo del minuto": [prezzi...] }, letta da research/08.
 //
-// Uso: node --max-old-space-size=12288 research/10-prezzi-veri.js
+// Con --tutte: prezzi veri per tutte le operazioni, non solo per quelle ambigue (serve a research/11).
+//
+// Uso: node --max-old-space-size=12288 research/10-prezzi-veri.js [--tutte]
 import { isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,13 +28,14 @@ const VARIANTI = [{ id: 0, N: REGOLA.N, k: REGOLA.k, direzione: REGOLA.direzione
 const PERIODO_A = { da: Date.UTC(2019, 8, 1), a: Date.UTC(2023, 0, 1), conta: Date.UTC(2020, 0, 1) };
 const VISION = 'https://data.binance.vision/data/futures/um/daily/aggTrades';
 const USCITA = join('data', 'aggtrades');
+const TUTTE = process.argv.includes('--tutte');
 
 // ---------- Worker: entrate delle operazioni ambigue di una moneta ----------
 if (!isMainThread) servizioWorker(parentPort, chiave => {
   const [gruppo, simbolo] = [chiave.slice(0, 1), chiave.slice(2)];
   const da = gruppo === 'A' ? PERIODO_A.da : INIZIO, a = gruppo === 'A' ? PERIODO_A.a : Infinity;
   const s = storicoConFermi(simbolo, workerData.fermi, { da, a });
-  const vuoto = { entrata: Float64Array.from([]) };
+  const vuoto = { entrata: Float64Array.from([]), ambigua: Uint8Array.from([]) };
   if (!s || s.n < 30 * 1440) return vuoto;
   const funding = (leggiFunding(simbolo) || []).filter(x => x[0] >= da && x[0] < a);
   const modi = ['vicino', 'sfavorevole', 'favorevole'].map(ordine =>
@@ -40,12 +43,14 @@ if (!isMainThread) servizioWorker(parentPort, chiave => {
   const [v, sf, fa] = modi;
   const chiaveOp = (o, i) => `${o.uscita[i]}|${o.rapporto[i]}|${o.motivo[i]}`;
   const ambigue = [];
+  const flag = [];
   for (let i = 0; i < v.entrata.length; i++) {
     // le entrate non dipendono dall'ordine dentro la candela: stesso indice = stessa operazione
     if (sf.entrata[i] !== v.entrata[i] || fa.entrata[i] !== v.entrata[i]) throw new Error(`${simbolo}: entrate diverse tra i modi`);
-    if (chiaveOp(v, i) !== chiaveOp(sf, i) || chiaveOp(v, i) !== chiaveOp(fa, i)) ambigue.push(v.entrata[i]);
+    ambigue.push(v.entrata[i]);
+    flag.push(chiaveOp(v, i) !== chiaveOp(sf, i) || chiaveOp(v, i) !== chiaveOp(fa, i) ? 1 : 0);
   }
-  return comeColonne({ entrata: Float64Array }, { entrata: ambigue });
+  return comeColonne({ entrata: Float64Array, ambigua: Uint8Array }, { entrata: ambigue, ambigua: flag });
 });
 
 // Punti di svolta di una sequenza di prezzi
@@ -97,29 +102,36 @@ async function main() {
   const escluse = new Set(['BTCUSDT', 'ETHUSDT']);
   const voci = [...rA.simboli.filter(s => !escluse.has(s) && rA.rapporto[s]).map(s => `A_${s}`), ...rB.simboli.filter(s => !escluse.has(s) && rB.rapporto[s]).map(s => `B_${s}`)];
   const amb = await operazioniInParallelo({
-    script: fileURLToPath(import.meta.url), cartella: join('data', 'backtest', 'ambigue'), firmaConfig: firma({ REGOLA, PERIODO_A, v: 2 }),
+    script: fileURLToPath(import.meta.url), cartella: join('data', 'backtest', 'ambigue'), firmaConfig: firma({ REGOLA, PERIODO_A, v: 3 }),
     simboli: voci, datiWorker: { fermi }, rifai: false,
   });
   mkdirSync(USCITA, { recursive: true });
   // giorni da scaricare per moneta
   const lavori = [];
-  let nAmb = 0;
+  let nAmb = 0, nTot = 0;
   for (const chiave of voci) {
-    const simbolo = chiave.slice(2), entrate = [...amb[chiave].entrata];
-    nAmb += entrate.length;
+    const simbolo = chiave.slice(2), c = amb[chiave];
+    const tutte = [...c.entrata], ambigue = tutte.filter((_, i) => c.ambigua[i]);
+    const entrate = TUTTE ? tutte : ambigue;
+    nAmb += ambigue.length; nTot += entrate.length;
     const file = join(USCITA, `${simbolo}.json`);
-    const gia = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : { percorsi: {}, giorni: [], conta: { minuti: 0, diversi: 0, mancanti: 0 }, giorniMancanti: [] };
+    const gia = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : { percorsi: {}, giorni: [], conta: { minuti: 0, diversi: 0, mancanti: 0 }, giorniMancanti: [], visti: [] };
+    const finestra = e => Array.from({ length: REGOLA.config.durataMassima + 2 }, (_, k) => e + k * MIN);
+    // file della prima versione: i minuti già visti sono quelli delle operazioni ambigue nei giorni già scaricati
+    if (!gia.visti) gia.visti = ambigue.flatMap(finestra).filter(m => gia.giorni.includes(Math.floor(m / GIORNO) * GIORNO));
+    const visti = new Set(gia.visti);
+    gia.visti = visti; // Set durante il lavoro, salvato come elenco
     const perGiorno = new Map();
-    for (const e of entrate) for (let k = 0; k <= REGOLA.config.durataMassima + 1; k++) {
-      const m = e + k * MIN, g = Math.floor(m / GIORNO) * GIORNO;
-      if (gia.giorni.includes(g)) continue;
+    for (const e of entrate) for (const m of finestra(e)) {
+      const g = Math.floor(m / GIORNO) * GIORNO;
+      if (visti.has(m)) continue;
       if (!perGiorno.has(g)) perGiorno.set(g, new Set());
       perGiorno.get(g).add(m);
     }
     if (perGiorno.size) lavori.push({ simbolo, file, gia, perGiorno });
   }
   const totGiorni = lavori.reduce((s, l) => s + l.perGiorno.size, 0);
-  console.log(`${nAmb} operazioni ambigue · ${totGiorni} giorni di aggTrades da scaricare`);
+  console.log(`${nAmb} operazioni ambigue, ${nTot} da coprire con i prezzi veri · ${totGiorni} giorni di aggTrades da scaricare`);
   let fatti = 0;
   const t0 = Date.now();
   await inParallelo(lavori, 4, async ({ simbolo, file, gia, perGiorno }) => {
@@ -129,21 +141,23 @@ async function main() {
       const per = await prezziDelGiorno(simbolo, g, perGiorno.get(g));
       if (!per) { gia.giorniMancanti.push(data(g)); } else {
         for (const [m, prezzi] of per) {
+          gia.visti.add(m);
           if (!prezzi.length) { gia.conta.mancanti++; continue; }
           const i = (m - s.t0) / MIN;
-          const max = Math.max(...prezzi), min = Math.min(...prezzi);
+          let max = -Infinity, min = Infinity; // ciclo: un minuto può avere centinaia di migliaia di scambi
+          for (const p of prezzi) { if (p > max) max = p; if (p < min) min = p; }
           gia.conta.minuti++;
           // il percorso vale solo se coincide con la candela (stessa fonte: gli scambi di Binance)
           if (Math.abs(max - s.high[i]) > 1e-9 * max || Math.abs(min - s.low[i]) > 1e-9 * min) { gia.conta.diversi++; continue; }
           gia.percorsi[m] = svolte(prezzi);
         }
-        gia.giorni.push(g);
-        writeFileSync(file, JSON.stringify(gia)); // si riprende da qui se si interrompe
+        if (!gia.giorni.includes(g)) gia.giorni.push(g);
+        writeFileSync(file, JSON.stringify({ ...gia, visti: [...gia.visti] })); // si riprende da qui se si interrompe
       }
       fatti++;
       if (fatti % 20 === 0) console.log(`  ${fatti}/${totGiorni} giorni (${Math.round((Date.now() - t0) / 1000)} s)`);
     }
-    writeFileSync(file, JSON.stringify(gia));
+    writeFileSync(file, JSON.stringify({ ...gia, visti: [...gia.visti] }));
   });
   const controllo = { minuti: 0, diversi: 0, mancanti: 0, giorniMancanti: [] };
   for (const chiave of voci) {
@@ -153,7 +167,7 @@ async function main() {
     for (const k of ['minuti', 'diversi', 'mancanti']) controllo[k] += x.conta[k];
     controllo.giorniMancanti.push(...x.giorniMancanti.map(g => `${chiave.slice(2)} ${g}`));
   }
-  writeFileSync(join(USCITA, 'controllo.json'), JSON.stringify({ creato: new Date().toISOString(), operazioniAmbigue: nAmb, ...controllo }, null, 1));
+  writeFileSync(join(USCITA, 'controllo.json'), JSON.stringify({ creato: new Date().toISOString(), operazioniAmbigue: nAmb, operazioniCoperte: nTot, ...controllo }, null, 1));
   console.log(`Minuti con prezzi veri: ${controllo.minuti}, diversi dalla candela: ${controllo.diversi}, senza scambi: ${controllo.mancanti}, giorni non trovati: ${controllo.giorniMancanti.length}`);
 }
 
