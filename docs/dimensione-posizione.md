@@ -15,9 +15,9 @@ Dimensione fissa, leva 3x (3.000 USDT per posizione), solo le operazioni prese d
 
 Gruppo | Operazioni | Volume Binance al minuto, mediana dell'ora prima | Volume Binance del minuto d'entrata (mediana) | Entrata / ora prima | Posizione / volume Binance (mediana) | (90° percentile) | Posizione / volume Bitunix stimato (mediana) | (90° percentile) | Operazioni oltre l'1% del volume Bitunix
 ---|---:|---:|---:|---:|---:|---:|---:|---:|---:
-| A (2020–2022) | 917 | 202.408 | 2,1 mln | 10,2× | 0,14% | 1,49% | 1,8% | 21,2% | 61% |
-| B (monete 51–100) | 1.894 | 33.979 | 669.405 | 19,5× | 0,45% | 3,56% | 8,1% | 75,1% | 94% |
-| A + B | 2.811 | 59.938 | 952.530 | 15,7× | 0,31% | 2,79% | 5,1% | 56,0% | 83% |
+| A (2020–2022) | 626 | 210.908 | 2,2 mln | 9,8× | 0,14% | 1,61% | 1,8% | 23,0% | 60% |
+| B (monete 51–100) | 0 | – | – | –× | – | – | – | – | – |
+| A + B | 626 | 210.908 | 2,2 mln | 9,8× | 0,14% | 1,61% | 1,8% | 23,0% | 60% |
 
 Il minuto d'entrata ha di solito molto più volume del normale: la posizione entra nel momento in cui il mercato è più attivo.
 
@@ -37,13 +37,13 @@ Valore della posizione (USDT) | Posizione / volume Bitunix stimato (mediana) | (
 
 Anno | Valore mediano della posizione | Posizione / volume Bitunix stimato (mediana) | Operazioni oltre l'1%
 ---|---:|---:|---:
-2020 | 3.193 | 6,6% | 87%
-2021 | 2.482 | 0,6% | 37%
-2022 | 2.179 | 1,4% | 57%
-2023 | 1.992 | 2,6% | 83%
-2024 | 2.562 | 3,2% | 83%
-2025 | 2.882 | 8,6% | 93%
-2026 | 2.820 | 15,6% | 98%
+2020 | 2.873 | 5,8% | 85%
+2021 | 1.821 | 0,4% | 31%
+2022 | 1.304 | 0,8% | 44%
+2023 | 879 | 1,2% | 56%
+2024 | 628 | 0,9% | 43%
+2025 | 510 | 1,5% | 59%
+2026 | 254 | 1,5% | 57%
 
 ## 2. Quanto slittamento sopporta la regola
 
@@ -51,20 +51,20 @@ Portafoglio A + B, dimensione fissa, leva 3x, slittamento uguale per tutte le mo
 
 Slittamento per lato | Rendimento | Profit factor | Peggior calo
 ---:|---:|---:|---:
-0,05% | 47,5% | 1,07 | 40,3%
-0,10% | -40,1% | 0,94 | 64,3%
-0,15% | -102,2% | 0,67 | 102,0%
-0,20% | -101,3% | 0,59 | 101,2%
-0,25% | -101,9% | 0,51 | 101,8%
-0,30% | -105,0% | 0,47 | 104,7%
-0,35% | -102,5% | 0,45 | 102,4%
-0,40% | -100,5% | 0,42 | 100,4%
-0,45% | -100,6% | 0,39 | 100,6%
-0,50% | -105,6% | 0,37 | 105,6%
-0,55% | -101,1% | 0,29 | 101,1%
-0,60% | -100,7% | 0,26 | 100,7%
+0,05% | -100,1% | 0,58 | 100,1%
+0,10% | -100,7% | 0,47 | 100,6%
+0,15% | -103,3% | 0,42 | 103,0%
+0,20% | -100,2% | 0,39 | 100,2%
+0,25% | -100,4% | 0,37 | 100,4%
+0,30% | -100,2% | 0,34 | 100,2%
+0,35% | -103,2% | 0,32 | 103,1%
+0,40% | -101,6% | 0,29 | 101,6%
+0,45% | -100,3% | 0,20 | 100,3%
+0,50% | -100,4% | 0,18 | 100,4%
+0,55% | -102,6% | 0,17 | 102,6%
+0,60% | -100,0% | 0,16 | 100,0%
 
-**Pareggio: circa 0,08% per lato.** Oltre quel valore la regola perde.
+**Nessun pareggio: la regola perde già con lo slittamento più basso provato (0,05% per lato).**
 
 ## 3. Dimensione massima per posizione, moneta per moneta
 
@@ -177,7 +177,7 @@ Valore della posizione (USDT) | Entro 0,08% | Entro 0,12%
 - Per alcune monete anche l'ordine a mercato massimo di Bitunix è piccolo (ZEREBRO 477 USDT, WAL 556 USDT), quindi servirebbero più ordini.
 - In pratica: **circa 1.000–3.000 USDT per posizione**, con un limite per moneta ricavato dal book. Oltre i 5.000 lo slittamento diventa un problema su una parte grande delle operazioni.
 
-**Ma per questa regola il problema viene prima.** Con i prezzi veri dentro il minuto (`docs/verifica-dati-nuovi.md`) la regola va in pareggio già a circa **0,08% per lato**. Qualunque slittamento realistico la rende negativa, anche con posizioni piccole. Queste misure restano utili per le prossime strategie: dicono quanto si può mettere per posizione su ogni moneta.
+**Ma per questa regola il problema viene prima.** Con i prezzi veri dentro il minuto (`docs/verifica-dati-nuovi.md`) la regola è in perdita già prima dei costi: lordo medio −0,03% per operazione, con i prezzi veri in tutte le operazioni. Nessuno slittamento la rende positiva, nemmeno con posizioni piccolissime. Queste misure restano utili per le prossime strategie: dicono quanto si può mettere per posizione su ogni moneta.
 
 **Limiti della misura.**
 - Il volume Bitunix è stimato col rapporto Bitunix/Binance di oggi; per il 2020–2022 è solo indicativo.

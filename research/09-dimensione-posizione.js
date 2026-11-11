@@ -87,7 +87,7 @@ for (let x = 0.0005; x <= 0.0060001; x += 0.0005) {
   const m = eseguiPortafoglio(ops, { leva: 3, slitt: { base: x, piccole: x }, composto: false, ordini: 3, contesto }).m;
   griglia.push({ x, m });
 }
-const pareggio = (() => { for (let k = 1; k < griglia.length; k++) if (griglia[k].m.rendimento <= 0) { const a = griglia[k - 1], b = griglia[k]; return a.x + (b.x - a.x) * a.m.rendimento / (a.m.rendimento - b.m.rendimento); } return NaN; })();
+const pareggio = (() => { if (griglia[0].m.rendimento <= 0) return NaN; for (let k = 1; k < griglia.length; k++) if (griglia[k].m.rendimento <= 0) { const a = griglia[k - 1], b = griglia[k]; return a.x + (b.x - a.x) * a.m.rendimento / (a.m.rendimento - b.m.rendimento); } return NaN; })();
 
 // ---------- 3. Dimensione massima per moneta dal book Bitunix ----------
 const qMax = (c, budget, fattore) => Math.max(0, (budget - c.spreadBps / 2 / 10000) / 0.0005 * c.profondita01 * fattore);
@@ -148,7 +148,7 @@ Slittamento per lato | Rendimento | Profit factor | Peggior calo
 ---:|---:|---:|---:
 ${griglia.map(g => `${pct(g.x, 2)} | ${pct(g.m.rendimento)} | ${num(g.m.profitFactor)} | ${pct(g.m.caloMassimo)}`).join('\n')}
 
-**Pareggio: circa ${pct(pareggio, 2)} per lato.** Oltre quel valore la regola perde.
+${Number.isFinite(pareggio) ? `**Pareggio: circa ${pct(pareggio, 2)} per lato.** Oltre quel valore la regola perde.` : `**Nessun pareggio: la regola perde già con lo slittamento più basso provato (${pct(griglia[0].x, 2)} per lato).**`}
 
 ## 3. Dimensione massima per posizione, moneta per moneta
 

@@ -106,7 +106,7 @@ async function main() {
   const voci = [...listaA.map(s => ({ chiave: `A_${s}`, simbolo: s, gruppo: 'A' })), ...listaB.map(s => ({ chiave: `B_${s}`, simbolo: s, gruppo: 'B' }))];
   console.log(`A: ${listaA.length} monete 2020–2022 · B: ${listaB.length} monete dal 2023 al ${data(fineB - 1)}`);
   const colonne = await operazioniInParallelo({
-    script: fileURLToPath(import.meta.url), cartella: join('data', 'backtest', 'verifica'), firmaConfig: firma({ REGOLA, PERIODO_A, MODI, v: 2 }),
+    script: fileURLToPath(import.meta.url), cartella: join('data', 'backtest', 'verifica'), firmaConfig: firma({ REGOLA, PERIODO_A, MODI, veri: existsSync('data/aggtrades/controllo.json') ? JSON.parse(readFileSync('data/aggtrades/controllo.json', 'utf8')).creato : null, v: 2 }),
     simboli: voci.map(v => v.chiave), datiWorker: { fermi }, rifai: false,
   });
   console.log('Carico i prezzi per il freno...');
@@ -235,7 +235,7 @@ function scriviDoc(out) {
   p('## Dopo la revisione indipendente');
   p('Una revisione fatta da chi non aveva scritto il codice (`docs/revisione.md`) non ha trovato errori di programmazione. Ha però trovato ipotesi che rendono il risultato migliore del vero. Qui sono corrette o misurate; **la regola è la stessa**.');
   p('');
-  p(`- **Ordine dentro la candela.** In molte operazioni l'esito dipende da cosa viene toccato prima, il massimo o il minimo del minuto. Per queste operazioni ora si usano i prezzi veri degli scambi di Binance (aggTrades), minuto per minuto dall'entrata alla durata massima: ${intero(rv.conVeri)} operazioni su ${intero(rv.ordineCandela[0].m.operazioni)} prese dal portafoglio (${intero(rv.totale)} segnali)${rv.controlloVeri ? `, ${intero(rv.controlloVeri.minuti)} minuti di prezzi veri, ${intero(rv.controlloVeri.diversi)} minuti scartati perché non coincidevano con la candela` : ''}. Tutti i risultati di questo documento usano i prezzi veri.`);
+  p(`- **Ordine dentro la candela.** In molte operazioni l'esito dipende da cosa viene toccato prima, il massimo o il minimo del minuto. Ora si usano i prezzi veri degli scambi di Binance (aggTrades), minuto per minuto dall'entrata alla durata massima, per ${intero(rv.conVeri)} operazioni su ${intero(rv.totale)} segnali (il portafoglio ne prende ${intero(rv.ordineCandela[0].m.operazioni)} prima di fermarsi o finire)${rv.controlloVeri ? `, ${intero(rv.controlloVeri.minuti)} minuti di prezzi veri, ${intero(rv.controlloVeri.diversi)} minuti scartati perché non coincidevano con la candela` : ''}. Tutti i risultati di questo documento usano i prezzi veri.`);
   p('- **Portafoglio.** Il peggior calo e il giorno peggiore ora contano anche le perdite aperte, minuto per minuto. Il freno controlla anche le posizioni aperte nello stesso minuto. I fermi di Binance non sono più usati come prezzi validi.');
   p('');
   p('**Ordine dentro la candela** (A + B, dimensione fissa, leva 3x, slittamento 0,08%):');

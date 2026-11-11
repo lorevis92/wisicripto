@@ -208,6 +208,7 @@ Aggiunto da chi ha scritto il codice, dopo aver letto questa revisione. La regol
 
 **Effetto.**
 - Con i prezzi veri il lordo medio di A + B scende dallo 0,80% allo 0,32%. Il portafoglio passa da +397% a -14% (dimensione fissa, leva 3x, slittamento 0,08%), e il verdetto diventa **non regge**.
+- Aggiornamento: con i prezzi veri in **tutte** le 2.989 operazioni, non solo in quelle ambigue, il lordo medio scende a −0,03% e il portafoglio va in rovina (`docs/verifica-dati-nuovi.md`, `docs/perdite-e-uscite.md`).
 - L'effetto è più forte anche del caso "estremo sfavorevole per primo" stimato qui sopra. Dentro un minuto di esplosione il prezzo fa molti piccoli ritorni, e la protezione del guadagno stretta (40% da +0,5 unità) ne coglie uno presto.
 - Dettagli in `docs/verifica-dati-nuovi.md`.
 - I documenti precedenti (`apertura-sessione.md`, `btc-eth-limite.md`, `grande-movimento.md`, `regola-fissata.md`) non sono stati rifatti con queste correzioni e usano ancora solo le candele.

@@ -17,9 +17,11 @@ Strategia di trading automatica sui perpetual crypto di Bitunix. Part of the WiS
 - `npm run btc-eth-limite` — apertura USA su BTC ed ETH con entrata a ordine limite → `docs/btc-eth-limite.md`
 - `npm run grande-movimento` — strategia 2, grande movimento con conferme → `docs/grande-movimento.md`
 - `npm run fissa-regola` — fissa la regola del grande movimento usando solo il primo 70% → `docs/regola-fissata.md`
-- `npm run prezzi-veri` — scarica gli aggTrades di Binance per le operazioni il cui esito dipende dall'ordine dentro la candela → `data/aggtrades/` (da lanciare prima di `verifica`)
+- `npm run prezzi-veri` — scarica gli aggTrades di Binance per tutte le operazioni del grande movimento → `data/aggtrades/` (da lanciare prima di `verifica` e `uscite-*`)
 - `npm run verifica` — verifica la regola fissata su dati mai usati (2020–2022 e monete 51–100) → `docs/verifica-dati-nuovi.md`
 - `npm run dimensione` — posizione rispetto al volume del minuto d'entrata e dimensione massima per moneta → `docs/dimensione-posizione.md`
+- `npm run uscite-scelta` — sceglie l'uscita del grande movimento sulle operazioni fino al 2023 → `docs/regola-fissata-2.md`
+- `npm run uscite-verifica` — dove si perde e verifica dell'uscita scelta dal 2024 → `docs/perdite-e-uscite.md`
 - `npm run prova-motore` — controlli del motore su casi costruiti a mano
 
 Nessuna dipendenza esterna: basta Node.js 20 o più recente.
