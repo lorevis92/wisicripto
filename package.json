@@ -10,6 +10,8 @@
   "scripts": {
     "universo": "node research/01-universo.js",
     "storico": "node research/02-scarica-storico.js",
-    "confronto": "node research/03-bitunix-vs-binance.js"
+    "confronto": "node research/03-bitunix-vs-binance.js",
+    "apertura": "node --max-old-space-size=8192 research/04-apertura-sessione.js",
+    "prova-motore": "node research/motore/prova-motore.js"
   }
 }
