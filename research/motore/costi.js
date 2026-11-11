@@ -1,22 +1,28 @@
 // Costi di un'operazione: commissione e slittamento per lato, funding.
+// Commissioni Bitunix futures VIP 0 (verificate su bitunix.com/service/handling-fee, novembre 2026):
+// maker 0,02% (ordine limite che resta nel book), taker 0,06% (ordine a mercato o che si esegue subito).
 
-export const COMMISSIONE = 0.0006; // Bitunix, circa 0,06% per lato (taker)
+export const COMMISSIONE = 0.0006;        // taker
+export const COMMISSIONE_MAKER = 0.0002;  // maker
 
 /**
- * Rendimento netto sul valore della posizione (nozionale), costi compresi.
+ * Rendimento netto sul valore della posizione (nozionale), costi compresi. Per lato si può dare
+ * commissione e slittamento diversi (es. entrata a ordine limite: maker e senza slittamento; uscita a mercato).
  * @param {1|-1} lato
  * @param {number} rapporto prezzo d'uscita / prezzo d'entrata, prima dello slittamento
- * @param {number} slittamento per lato, in frazione
- * @param {number} funding costo del funding in frazione del nozionale (positivo = pagato)
- * @param {number} [commissione]
+ * @param {object} c { slittEntrata, slittUscita, commEntrata, commUscita, funding } (frazioni; funding positivo = pagato)
  */
+export function nettoOperazione(lato, rapporto, { slittEntrata, slittUscita, commEntrata = COMMISSIONE, commUscita = COMMISSIONE, funding = 0 }) {
+  // valore d'uscita in proporzione al valore d'entrata eseguito
+  const r = lato === 1
+    ? rapporto * (1 - slittUscita) / (1 + slittEntrata)     // compro più caro, vendo più basso
+    : rapporto * (1 + slittUscita) / (1 - slittEntrata);    // vendo più basso, ricompro più caro
+  return lato * (r - 1) - commEntrata - commUscita * r - funding;
+}
+
+// Caso più comune: stesso slittamento e commissione taker sui due lati
 export function rendimentoNetto(lato, rapporto, slittamento, funding, commissione = COMMISSIONE) {
-  if (lato === 1) {
-    const r = rapporto * (1 - slittamento) / (1 + slittamento); // compro più caro, vendo più basso
-    return r - 1 - commissione * (1 + r) - funding;
-  }
-  const r = rapporto * (1 + slittamento) / (1 - slittamento); // vendo più basso, ricompro più caro
-  return 1 - r - commissione * (1 + r) - funding;
+  return nettoOperazione(lato, rapporto, { slittEntrata: slittamento, slittUscita: slittamento, commEntrata: commissione, commUscita: commissione, funding });
 }
 
 /**
