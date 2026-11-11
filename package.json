@@ -1,0 +1,11 @@
+{
+  "name": "wisicripto",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Wisi Cripto — ricerca e strategia sui perpetual crypto di Bitunix",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {}
+}
