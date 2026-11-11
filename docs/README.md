@@ -9,4 +9,6 @@ Qui finiscono i risultati della Fase 0, uno per file, in italiano semplice.
 - `btc-eth-limite.md` — apertura USA su BTC ed ETH con entrata a ordine limite
 - `grande-movimento.md` — strategia 2: grande movimento in qualsiasi momento, con conferme
 - `regola-fissata.md` — la regola del grande movimento, fissata sul primo 70% prima dei test nuovi
-- `verifica-dati-nuovi.md` — verifica della regola su dati mai usati
+- `verifica-dati-nuovi.md` — verifica della regola su dati mai usati (dopo la revisione, con i prezzi veri dentro il minuto: non regge)
+- `revisione.md` — revisione indipendente del codice del grande movimento e correzioni applicate
+- `dimensione-posizione.md` — posizione rispetto al volume del minuto d'entrata e dimensione massima per moneta

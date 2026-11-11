@@ -4,36 +4,87 @@ Aggiornato il 2026-11-11. Regola: `docs/regola-fissata.md` (fissata prima di que
 
 <!-- conclusione:inizio -->
 ## Conclusione
-**Sì: la regola regge su dati mai visti.** Soddisfa tutti e quattro i criteri decisi prima del test, senza nessuna modifica. È il primo risultato della Fase 0 che passa una verifica onesta. Va però preso con una forte cautela: le monete sono state scelte con la liquidità di oggi (vedi sotto).
+**No: dopo la revisione la regola non regge.** Il primo verdetto ("regge", +397%) dipendeva da un'ipotesi sulle candele che si è rivelata troppo favorevole. La regola non è stata cambiata: è cambiato solo il modo di simulare cosa succede dentro il minuto.
 
-Con dimensione fissa, leva 3x e slittamento 0,08% per lato:
+**Cosa è successo.**
+- Una revisione indipendente (`docs/revisione.md`) ha confermato che il codice fa quello che dichiara: 20 operazioni rifatte a mano e tutte le 2.989 rigenerate con codice separato coincidono.
+- Ha però trovato che quasi metà delle operazioni entra ed esce nello stesso minuto. In quei casi il risultato dipende da cosa il prezzo tocca prima dentro la candela, e con le sole candele non si può sapere.
+- Per le 1.247 operazioni in cui questo cambia l'esito ho scaricato i prezzi veri di ogni scambio da Binance (aggTrades: 1.339 giorni, 301.493 minuti, 99,9% coincidenti con le candele). Ho rifatto le operazioni su quei prezzi; un controllo indipendente su 40 di esse torna.
 
-| Dati mai usati | Operazioni | Lordo medio per operazione | Rendimento | Profit factor | Peggior calo |
-|---|---:|---:|---:|---:|---:|
-| A: 2020–2022, 22 altcoin | 936 | 0,63% | +100% | 1,39 | 14% |
-| B: monete 51–100, dal 2023 | 2.053 | 0,88% | +294% | 1,61 | 9% |
-| **A + B** | **2.989** | **0,80%** | **+397%** | **1,54** | **14%** |
+**Il risultato con i prezzi veri** (dimensione fissa, leva 3x, slittamento 0,08%):
 
-- **Regge anche con costi peggiori.** Con lo slittamento allo 0,12% A + B fa ancora +329% (profit factor 1,43) e il netto medio resta +0,44% per operazione.
-- **Tutti gli anni sono in utile**, dal 2020 al 2026. Il 2022 è debole (profit factor 1,17, lordo 0,38%) e il 2026 si indebolisce (profit factor 1,25, peggior calo 26%).
-- **Il vantaggio è diffuso:** 61 monete su 72 sono in utile, e le 5 migliori fanno un quarto del risultato.
-- **Come nel 70%:** gli short rendono più dei long (1,0% contro 0,45% lordo), il weekend e la sera (20–24 UTC) sono i momenti migliori, le 08–12 UTC il peggiore.
-- **Quasi tutti i segnali vengono dalla finestra da 15 minuti** (2.881 su 2.989): quella da 60 minuti aggiunge poco.
+| | Lordo medio | Rendimento | Profit factor | Peggior calo |
+|---|---:|---:|---:|---:|
+| Prima (solo candele) | 0,80% | +397% | 1,54 | 14% |
+| **Con i prezzi veri** | **0,32%** | **-14%** | **0,98** | **54%** |
+| A da solo (2020–2022) | 0,16% | -41% | 0,84 | 52% |
+| B da solo (monete 51–100) | 0,40% | +39% | 1,08 | 35% |
 
-**Rischio e il calo del 40%.** Il calo del 40,6% della versione base nel 30% (aprile–luglio 2026) **non viene da un solo evento**:
-- è una discesa lenta di 91 giorni, con 228 operazioni chiuse e non più di 7 perdite di fila;
-- il giorno peggiore pesa solo il 13% della discesa, i 3 peggiori il 30%;
-- solo in un giorno (4 giugno 2026) c'erano molte posizioni dalla stessa parte: 7 short aperti insieme.
+- Dei quattro criteri decisi prima ne passa uno solo, il lordo medio sopra lo 0,30%, e di poco.
+- Con lo slittamento allo 0,12% si arriva alla rovina.
+- Il pareggio è a circa **0,08% per lato**, cioè proprio lo slittamento ipotizzato (`docs/dimensione-posizione.md`).
+- Con lo slittamento stimato dal book di Bitunix (in media 0,17% per lato con posizioni da 3.000 USDT) si perde tutto.
 
-È la fase in cui il vantaggio della versione a 8× si era ridotto a quasi niente. Con la regola fissata il calo più profondo sui dati nuovi è del **14%** (settembre–dicembre 2020). Anche questo è fatto di tante piccole perdite e non di un crollo: il giorno peggiore pesa il 16%, la serie più lunga di perdite è di 7. Il giorno peggiore in assoluto è -4,7% del capitale e il freno non è mai scattato. Le posizioni aperte insieme dalla stessa parte nei giorni peggiori sono poche (1–4).
+**Perché i prezzi veri cambiano così tanto.**
+- La candela ha 4 punti: apertura, massimo, minimo, chiusura. Dentro un minuto di esplosione il prezzo invece sale a scatti, con tanti piccoli ritorni.
+- La protezione del guadagno di Wisi Trade si attiva da +0,5 unità e chiude se si restituisce il 40% del guadagno massimo. È strettissima all'inizio: a +0,6 unità basta un ritorno di 0,24 unità.
+- Con le candele il prezzo "salta" subito al massimo e la protezione si piazza in alto. Con i prezzi veri scatta su uno dei primi ritorni, con un guadagno piccolo.
+- Il risultato: le operazioni chiuse nel minuto d'entrata salgono da 1.460 a 1.830, e sulle operazioni ambigue il lordo medio scende dal 2,17% all'1,02%.
+- Questo effetto non si vede nemmeno nell'ipotesi pessimista "estremo sfavorevole per primo" (lordo 0,57%), perché anche lì il percorso ha solo 4 punti.
+- In Prova e in Reale il motore riceverebbe proprio i prezzi veri, quindi il risultato giusto è questo.
 
-**I limiti che pesano davvero:**
-1. **Monete scelte oggi.** Le 22 altcoin di A sono quelle che nel 2026 esistono ancora e sono tra le più liquide; le 50 di B sono quelle che sono arrivate tra le prime 100. Le monete crollate a zero o tolte dalla quotazione non ci sono. Qui l'effetto probabilmente è più piccolo del solito, perché la regola guadagna più con gli short che con i long. Però i numeri vanno considerati un **massimo**, non una previsione.
-2. **Esecuzione.** Si entra nei primi minuti di un'esplosione. Le monete 51–100 hanno su Bitunix 1–2,6 milioni di USDT di volume al giorno e circa 15.000 USDT di book entro lo 0,1% in un momento tranquillo. Una posizione da 3.000–5.000 USDT è al limite. In quei minuti lo slittamento vero può superare lo 0,12%, e Bitunix può non avere il contratto operabile via API per tutte le monete.
-3. **I rendimenti composti** (fino a migliaia di %) non sono realistici: con il capitale che cresce la posizione supera presto la liquidità di queste monete. Contano la dimensione fissa e il guadagno per operazione.
+**Le altre cautele, misurate:**
+- Senza gli ultimi 30 giorni di B, quelli usati per scegliere le monete, B scende da +39% a +24%.
+- Sempre in B, le monete quotate dal 2025 sono in pareggio (-2%); quelle più vecchie fanno +45%.
+- Anno per anno: 2020–2022 tutti in perdita; 2023–2025 in utile; 2026 -35%.
+- Il funding pesa pochissimo (0,001% per operazione).
 
-**Prossimo passo consigliato:** passare alla **Fase 1** con questa regola, in modalità **Simulazione** e poi **Prova** su Bitunix con capitale finto. Lì si misurano due cose che i dati storici non possono dire: lo slittamento vero in entrata nei movimenti violenti e quante monete sono davvero operabili via API. Per decidere se andare sul Reale, conviene fissare già adesso i numeri minimi della Prova: per esempio almeno 100 operazioni, slittamento medio misurato sotto lo 0,15% per lato e lordo medio sopra lo 0,5%.
+**Cosa vuol dire per il progetto.**
+- Questa regola **non va portata in Fase 1**.
+- Anche i risultati di `docs/grande-movimento.md` e `docs/regola-fissata.md` usavano le candele, quindi sono gonfiati allo stesso modo. La scelta della regola sul 70% è stata fatta su numeri troppo buoni.
+- Resta un segnale debole ma coerente: B, weekend, sera, finestra a 60 minuti e short vanno meglio. Quindi il problema sembra più nelle uscite che nel segnale.
+- Provare altre uscite (per esempio senza la protezione stretta all'inizio) sarebbe però una regola nuova, scelta dopo aver visto questi dati. Andrebbe verificata su dati davvero nuovi, cioè quelli dopo l'11/11/2026, oppure fissata prima su un periodo e verificata su un altro, sempre con i prezzi veri.
+- Ogni test futuro con uscite strette deve usare i prezzi veri (gli aggTrades), non le 4 punte della candela.
 <!-- conclusione:fine -->
+
+## Dopo la revisione indipendente
+Una revisione fatta da chi non aveva scritto il codice (`docs/revisione.md`) non ha trovato errori di programmazione. Ha però trovato ipotesi che rendono il risultato migliore del vero. Qui sono corrette o misurate; **la regola è la stessa**.
+
+- **Ordine dentro la candela.** In molte operazioni l'esito dipende da cosa viene toccato prima, il massimo o il minimo del minuto. Per queste operazioni ora si usano i prezzi veri degli scambi di Binance (aggTrades), minuto per minuto dall'entrata alla durata massima: 1.244 operazioni su 2.811 prese dal portafoglio (2.989 segnali), 301.493 minuti di prezzi veri, 300 minuti scartati perché non coincidevano con la candela. Tutti i risultati di questo documento usano i prezzi veri.
+- **Portafoglio.** Il peggior calo e il giorno peggiore ora contano anche le perdite aperte, minuto per minuto. Il freno controlla anche le posizioni aperte nello stesso minuto. I fermi di Binance non sono più usati come prezzi validi.
+
+**Ordine dentro la candela** (A + B, dimensione fissa, leva 3x, slittamento 0,08%):
+
+| Percorso dentro il minuto | Lordo medio | Rendimento | Profit factor | Peggior calo | Giorno peggiore | Operazioni | Medio netto |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| prezzi veri | 0,322% | -13,8% | 0,98 | 54,2% | -13,9% | 2.811 | -0,016% |
+| solo candele (regola Wisi Trade) | 0,801% | 396,5% | 1,54 | 14,1% | -6,0% | 2.824 | 0,468% |
+| estremo sfavorevole sempre per primo | 0,568% | 205,8% | 1,24 | 18,5% | -6,6% | 2.824 | 0,243% |
+
+**Slittamento per moneta dal book Bitunix** (A + B, dimensione fissa).
+- Formula: metà spread + 0,05% × posizione / profondità entro lo 0,1%.
+- La profondità è dimezzata per i minuti di esplosione; il minimo è 0,08%.
+- Dettagli in `docs/dimensione-posizione.md`.
+
+| Leva (posizione) | Slittamento medio | Mediano | Rendimento | Profit factor | Peggior calo | Giorno peggiore | Operazioni | Medio netto |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3x (3.000 USDT) | 0,17% | 0,08% | -100,0% (rovina) | 0,72 | 100% (rovina) | oltre -100% (rovina) | 1.207 | -0,281% |
+| 5x (5.000 USDT) | 0,19% | 0,08% | -100,0% (rovina) | 0,75 | 100% (rovina) | oltre -100% (rovina) | 860 | -0,239% |
+
+**Scelta delle monete di B.** Le monete 51–100 sono state scelte con il volume dei 30 giorni prima del 2026-11-11, che sono dentro il periodo di prova. Molte sono state quotate di recente.
+
+| Parte di B | Monete | Lordo medio | Rendimento | Profit factor | Peggior calo | Giorno peggiore | Operazioni | Medio netto |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| B, tutto | 50 | 0,396% | 39,0% | 1,08 | 34,8% | -9,6% | 1.899 | 0,068% |
+| B senza gli ultimi 30 giorni (dal 2026-10-12, usati per scegliere le monete) | 49 | 0,375% | 23,6% | 1,05 | 34,8% | -9,6% | 1.763 | 0,045% |
+| B, monete quotate su Binance prima del 2025 | 28 | 0,426% | 45,3% | 1,17 | 22,6% | -8,4% | 1.310 | 0,115% |
+| B, monete quotate dal 2025 | 22 | 0,327% | -2,3% | 0,99 | 38,0% | -11,1% | 624 | -0,012% |
+
+A + B senza gli ultimi 30 giorni di B: rendimento -23,3%, profit factor 0,97, peggior calo 54,2%.
+
+**Funding**: in media 0,0010% del valore della posizione per operazione (positivo = costo). Pesa poco, perché le posizioni durano al massimo 4 ore. È quello di Binance, non di Bitunix.
+
+**Quanto sono nuovi i dati.** L'elenco delle varianti tra cui la regola è stata scelta è stato deciso dopo aver già visto il 30% del periodo 2023–2026. B copre gli stessi mesi con altre monete, e le crypto si muovono insieme. I dati davvero indipendenti sono A (2020–2022) e quello che verrà dopo l'11/11/2026.
 
 ## Cosa è stato verificato
 - **Regola**: solo altcoin; segnale quando il rendimento degli ultimi 15 o 60 minuti supera **12 volte** il movimento normale; si segue il movimento; entrata a mercato al minuto dopo; uscite Wisi Trade (stop 1,5 unità, poi stop che segue 1 unità e protezione 40%), durata massima e pausa 4 ore.
@@ -43,105 +94,105 @@ Con dimensione fissa, leva 3x e slittamento 0,08% per lato:
 - **Metodo**: come negli altri test. 10.000 USDT, 10 posizioni, margine 10%, leva 3x e 5x, freno 8% su perdita chiusa + aperta, dimensione fissa e composto, media di 10 ordini casuali. Commissione 0,06% per lato, slittamento 0,05% / 0,08% / 0,12% per lato (minimo 0,08% dalla 15ª moneta, quindi quasi tutte), funding reale.
 
 ## I criteri decisi prima
-Dimensione fissa, leva 3x, slittamento 0,08%. **Verdetto: regge.**
+Dimensione fissa, leva 3x, slittamento 0,08%. **Verdetto: non regge.**
 
 | Criterio | Risultato | Soddisfatto |
 |---|---|---|
-| A + B: rendimento positivo e profit factor almeno 1,10 | 396,5%, PF 1,54 | sì |
-| A + B: lordo medio per operazione almeno 0,30% | 0,801% | sì |
-| in utile sia su A sia su B da soli | A 100,2%, B 293,9% | sì |
-| con slittamento 0,12% non in perdita | 329,1% | sì |
+| A + B: rendimento positivo e profit factor almeno 1,10 | -13,8%, PF 0,98 | **no** |
+| A + B: lordo medio per operazione almeno 0,30% | 0,322% | sì |
+| in utile sia su A sia su B da soli | A -40,6%, B 39,0% | **no** |
+| con slittamento 0,12% non in perdita | -94,2% (rovina) | **no** |
 
 ## Risultati
 Singole operazioni (senza limiti di posti), slittamento 0,08%:
 
 | Dati | Operazioni | Lordo medio | Netto medio (0,05%) | Netto medio (0,08%) | Netto medio (0,12%) | PF (0,08%) | Vincenti |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| A | 936 | 0,629% | 0,378% | 0,351% | 0,272% | 1,38 | 66% |
-| B | 2.053 | 0,879% | 0,598% | 0,598% | 0,519% | 1,72 | 66% |
-| A + B | 2.989 | 0,801% | 0,529% | 0,521% | 0,441% | 1,61 | 66% |
+| A | 936 | 0,161% | -0,091% | -0,117% | -0,197% | 0,87 | 62% |
+| B | 2.053 | 0,396% | 0,114% | 0,114% | 0,034% | 1,14 | 64% |
+| A + B | 2.989 | 0,322% | 0,050% | 0,042% | -0,038% | 1,05 | 64% |
 
 Portafoglio:
 
 | Dati | Slittamento | Leva | Dimensione | Rendimento | Profit factor | Peggior calo | Giorno peggiore | Operazioni | Medio netto |
 |---|---|---:|---|---:|---:|---:|---:|---:|---:|
-| A | 0,05% | 3x | fissa | 107,6% | 1,42 | 13,4% | -4,6% | 927 | 0,387% |
-| A | 0,05% | 3x | composto | 108,4% | 1,26 | 19,8% | -9,0% | 917 | 0,301% |
-| A | 0,05% | 5x | fissa | 183,2% | 1,44 | 18,3% | -4,6% | 927 | 0,395% |
-| A | 0,05% | 5x | composto | 208,1% | 1,21 | 35,3% | -10,4% | 917 | 0,297% |
-| A | 0,08% | 3x | fissa | 100,2% | 1,39 | 14,0% | -4,7% | 927 | 0,360% |
-| A | 0,08% | 3x | composto | 93,8% | 1,23 | 20,1% | -9,1% | 917 | 0,275% |
-| A | 0,08% | 5x | fissa | 130,4% | 1,31 | 19,2% | -8,1% | 923 | 0,282% |
-| A | 0,08% | 5x | composto | 173,0% | 1,19 | 37,0% | -10,6% | 917 | 0,271% |
-| A | 0,12% | 3x | fissa | 78,0% | 1,30 | 15,6% | -5,0% | 927 | 0,281% |
-| A | 0,12% | 3x | composto | 55,8% | 1,15 | 23,5% | -9,4% | 917 | 0,195% |
-| A | 0,12% | 5x | fissa | 94,3% | 1,22 | 21,5% | -8,9% | 917 | 0,206% |
-| A | 0,12% | 5x | composto | 89,9% | 1,11 | 42,1% | -11,0% | 917 | 0,191% |
-| B | 0,05% | 3x | fissa | 293,9% | 1,61 | 9,4% | -4,0% | 1.897 | 0,516% |
-| B | 0,05% | 3x | composto | 1.257,1% | 1,36 | 29,9% | -9,2% | 1.891 | 0,508% |
-| B | 0,05% | 5x | fissa | 499,7% | 1,63 | 11,6% | -5,9% | 1.897 | 0,527% |
-| B | 0,05% | 5x | composto | 6.433,0% | 1,35 | 39,3% | -12,4% | 1.881 | 0,519% |
-| B | 0,08% | 3x | fissa | 293,9% | 1,61 | 9,4% | -4,0% | 1.897 | 0,516% |
-| B | 0,08% | 3x | composto | 1.257,1% | 1,36 | 29,9% | -9,2% | 1.891 | 0,508% |
-| B | 0,08% | 5x | fissa | 499,7% | 1,63 | 11,6% | -5,9% | 1.897 | 0,527% |
-| B | 0,08% | 5x | composto | 6.433,0% | 1,35 | 39,3% | -12,4% | 1.881 | 0,519% |
-| B | 0,12% | 3x | fissa | 248,5% | 1,50 | 11,9% | -4,4% | 1.897 | 0,437% |
-| B | 0,12% | 3x | composto | 769,4% | 1,29 | 34,4% | -9,2% | 1.891 | 0,428% |
-| B | 0,12% | 5x | fissa | 424,3% | 1,52 | 13,0% | -6,6% | 1.897 | 0,447% |
-| B | 0,12% | 5x | composto | 3.019,4% | 1,28 | 44,8% | -13,1% | 1.881 | 0,440% |
-| A + B | 0,05% | 3x | fissa | 403,9% | 1,55 | 13,4% | -4,6% | 2.824 | 0,477% |
-| A + B | 0,05% | 3x | composto | 2.774,7% | 1,35 | 30,0% | -9,2% | 2.808 | 0,443% |
-| A + B | 0,05% | 5x | fissa | 687,0% | 1,57 | 18,3% | -4,6% | 2.824 | 0,487% |
-| A + B | 0,05% | 5x | composto | 20.782,6% | 1,35 | 39,3% | -11,6% | 2.798 | 0,449% |
-| A + B | 0,08% | 3x | fissa | 396,5% | 1,54 | 14,0% | -4,7% | 2.824 | 0,468% |
-| A + B | 0,08% | 3x | composto | 2.573,2% | 1,35 | 30,0% | -9,2% | 2.808 | 0,434% |
-| A + B | 0,08% | 5x | fissa | 634,2% | 1,52 | 19,2% | -8,1% | 2.820 | 0,450% |
-| A + B | 0,08% | 5x | composto | 18.409,2% | 1,35 | 39,3% | -11,6% | 2.798 | 0,441% |
-| A + B | 0,12% | 3x | fissa | 329,1% | 1,43 | 15,6% | -5,0% | 2.824 | 0,388% |
-| A + B | 0,12% | 3x | composto | 1.277,9% | 1,28 | 34,3% | -9,4% | 2.808 | 0,355% |
-| A + B | 0,12% | 5x | fissa | 522,7% | 1,42 | 21,5% | -8,9% | 2.814 | 0,372% |
-| A + B | 0,12% | 5x | composto | 6.049,6% | 1,27 | 44,9% | -12,1% | 2.798 | 0,361% |
+| A | 0,05% | 3x | fissa | -33,6% | 0,87 | 46,6% | -12,0% | 917 | -0,122% |
+| A | 0,05% | 3x | composto | -32,2% | 0,86 | 45,2% | -10,4% | 917 | -0,122% |
+| A | 0,05% | 5x | fissa | -64,0% | 0,84 | 76,1% | -18,7% | 886 | -0,144% |
+| A | 0,05% | 5x | composto | -50,9% | 0,85 | 65,3% | -11,4% | 917 | -0,127% |
+| A | 0,08% | 3x | fissa | -40,6% | 0,84 | 51,9% | -12,6% | 917 | -0,148% |
+| A | 0,08% | 3x | composto | -37,0% | 0,83 | 48,5% | -10,5% | 917 | -0,149% |
+| A | 0,08% | 5x | fissa | -84,1% | 0,79 | 91,0% | -32,6% | 880 | -0,191% |
+| A | 0,08% | 5x | composto | -58,6% | 0,82 | 70,2% | -11,5% | 917 | -0,164% |
+| A | 0,12% | 3x | fissa | -61,1% | 0,76 | 67,8% | -11,3% | 915 | -0,222% |
+| A | 0,12% | 3x | composto | -49,5% | 0,76 | 57,1% | -10,7% | 917 | -0,229% |
+| A | 0,12% | 5x | fissa | -100,0% (rovina) | 0,68 | 100% (rovina) | oltre -100% (rovina) | 568 | -0,356% |
+| A | 0,12% | 5x | composto | -72,8% | 0,75 | 79,1% | -11,8% | 917 | -0,254% |
+| B | 0,05% | 3x | fissa | 39,0% | 1,08 | 34,8% | -9,6% | 1.899 | 0,068% |
+| B | 0,05% | 3x | composto | 22,6% | 1,03 | 50,0% | -15,7% | 1.893 | 0,058% |
+| B | 0,05% | 5x | fissa | 61,9% | 1,08 | 41,7% | -13,6% | 1.897 | 0,065% |
+| B | 0,05% | 5x | composto | 4,9% | 1,00 | 70,3% | -26,8% | 1.883 | 0,045% |
+| B | 0,08% | 3x | fissa | 39,0% | 1,08 | 34,8% | -9,6% | 1.899 | 0,068% |
+| B | 0,08% | 3x | composto | 22,6% | 1,03 | 50,0% | -15,7% | 1.893 | 0,058% |
+| B | 0,08% | 5x | fissa | 61,9% | 1,08 | 41,7% | -13,6% | 1.897 | 0,065% |
+| B | 0,08% | 5x | composto | 4,9% | 1,00 | 70,3% | -26,8% | 1.883 | 0,045% |
+| B | 0,12% | 3x | fissa | -15,0% | 0,97 | 52,3% | -13,3% | 1.895 | -0,026% |
+| B | 0,12% | 3x | composto | -21,9% | 0,96 | 57,2% | -16,0% | 1.893 | -0,021% |
+| B | 0,12% | 5x | fissa | -11,1% | 0,99 | 62,1% | -20,9% | 1.884 | -0,012% |
+| B | 0,12% | 5x | composto | -51,8% | 0,94 | 77,5% | -27,4% | 1.883 | -0,039% |
+| A + B | 0,05% | 3x | fissa | -5,3% | 0,99 | 48,4% | -12,7% | 2.812 | -0,006% |
+| A + B | 0,05% | 3x | composto | -18,6% | 0,97 | 51,0% | -15,7% | 2.810 | -0,003% |
+| A + B | 0,05% | 5x | fissa | -64,3% (rovina) | 0,92 | 88,8% | -86,7% | 2.264 | -0,069% |
+| A + B | 0,05% | 5x | composto | -50,1% | 0,95 | 71,6% | -26,8% | 2.800 | -0,014% |
+| A + B | 0,08% | 3x | fissa | -13,8% | 0,98 | 54,2% | -13,9% | 2.811 | -0,016% |
+| A + B | 0,08% | 3x | composto | -24,3% | 0,96 | 51,4% | -15,7% | 2.810 | -0,012% |
+| A + B | 0,08% | 5x | fissa | -100,0% (rovina) | 0,79 | 100% (rovina) | oltre -100% (rovina) | 1.117 | -0,185% |
+| A + B | 0,08% | 5x | composto | -58,0% | 0,93 | 74,7% | -26,8% | 2.800 | -0,026% |
+| A + B | 0,12% | 3x | fissa | -94,2% (rovina) | 0,86 | 97,7% | oltre -100% (rovina) | 2.545 | -0,127% |
+| A + B | 0,12% | 3x | composto | -61,2% | 0,88 | 69,4% | -16,0% | 2.810 | -0,091% |
+| A + B | 0,12% | 5x | fissa | -100,0% (rovina) | 0,68 | 100% (rovina) | oltre -100% (rovina) | 568 | -0,356% |
+| A + B | 0,12% | 5x | composto | -87,1% | 0,83 | 91,3% | -27,4% | 2.800 | -0,110% |
 
 ## Anno per anno
 Dimensione fissa, leva 3x, slittamento 0,08%; ogni anno riparte da 10.000 USDT.
 
 | Anno | Dati | Rendimento | Profit factor | Peggior calo | Giorno peggiore | Operazioni | Medio netto | Lordo medio |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| 2020 | A | 41,2% | 1,66 | 14,0% | -2,4% | 230 | 0,597% | 0,875% |
-| 2021 | A | 22,3% | 1,19 | 18,9% | -8,2% | 336 | 0,221% | 0,719% |
-| 2022 | A | 12,9% | 1,17 | 16,4% | -6,8% | 351 | 0,123% | 0,384% |
-| 2023 | B | 56,2% | 1,88 | 8,1% | -4,0% | 361 | 0,519% | 0,978% |
-| 2024 | B | 101,2% | 2,23 | 5,5% | -3,8% | 387 | 0,872% | 1,162% |
-| 2025 | B | 71,2% | 1,77 | 7,8% | -2,7% | 376 | 0,631% | 0,861% |
-| 2026 (parziale) | B | 60,6% | 1,25 | 25,8% | -8,3% | 771 | 0,262% | 0,695% |
+| 2020 | A | -1,6% | 0,97 | 20,0% | -3,8% | 230 | -0,024% | 0,256% |
+| 2021 | A | -28,9% | 0,74 | 36,7% | -12,3% | 336 | -0,287% | 0,085% |
+| 2022 | A | -9,7% | 0,88 | 25,0% | -8,0% | 351 | -0,092% | 0,174% |
+| 2023 | B | 15,9% | 1,27 | 20,9% | -8,1% | 361 | 0,147% | 0,524% |
+| 2024 | B | 36,6% | 1,47 | 24,2% | -9,7% | 387 | 0,315% | 0,617% |
+| 2025 | B | 14,7% | 1,16 | 22,1% | -6,8% | 376 | 0,130% | 0,387% |
+| 2026 (parziale) | B | -34,7% | 0,85 | 55,5% | -17,3% | 763 | -0,151% | 0,224% |
 
 ## Scomposizione (singole operazioni, slittamento 0,08%)
 | Gruppo | Operazioni | Lordo medio | Netto medio | PF | Vincenti |
 |---|---:|---:|---:|---:|---:|
-| A (2020–2022) | 936 | 0,629% | 0,351% | 1,38 | 66% |
-| B (monete 51–100) | 2.053 | 0,879% | 0,598% | 1,72 | 66% |
-| Long | 1.216 | 0,454% | 0,175% | 1,22 | 68% |
-| Short | 1.773 | 1,039% | 0,758% | 1,83 | 64% |
-| Giorni feriali | 2.353 | 0,684% | 0,405% | 1,46 | 65% |
-| Weekend | 636 | 1,232% | 0,951% | 2,18 | 68% |
-| Finestra 15 min | 2.881 | 0,792% | 0,513% | 1,60 | 65% |
-| Finestra 60 min | 108 | 1,029% | 0,738% | 1,85 | 83% |
-| Ore 00–04 UTC | 556 | 0,719% | 0,440% | 1,46 | 65% |
-| Ore 04–08 UTC | 422 | 0,880% | 0,602% | 1,57 | 63% |
-| Ore 08–12 UTC | 423 | 0,322% | 0,040% | 1,04 | 64% |
-| Ore 12–16 UTC | 606 | 0,793% | 0,514% | 1,72 | 66% |
-| Ore 16–20 UTC | 536 | 0,697% | 0,414% | 1,49 | 65% |
-| Ore 20–24 UTC | 446 | 1,418% | 1,137% | 2,66 | 72% |
+| A (2020–2022) | 936 | 0,161% | -0,117% | 0,87 | 62% |
+| B (monete 51–100) | 2.053 | 0,396% | 0,114% | 1,14 | 64% |
+| Long | 1.216 | 0,235% | -0,043% | 0,94 | 65% |
+| Short | 1.773 | 0,382% | 0,100% | 1,11 | 62% |
+| Giorni feriali | 2.353 | 0,265% | -0,015% | 0,98 | 63% |
+| Weekend | 636 | 0,535% | 0,252% | 1,33 | 66% |
+| Finestra 15 min | 2.881 | 0,302% | 0,021% | 1,03 | 63% |
+| Finestra 60 min | 108 | 0,871% | 0,580% | 1,65 | 80% |
+| Ore 00–04 UTC | 556 | 0,393% | 0,114% | 1,13 | 64% |
+| Ore 04–08 UTC | 422 | 0,094% | -0,185% | 0,82 | 60% |
+| Ore 08–12 UTC | 423 | 0,096% | -0,186% | 0,80 | 61% |
+| Ore 12–16 UTC | 606 | 0,351% | 0,072% | 1,10 | 64% |
+| Ore 16–20 UTC | 536 | 0,420% | 0,137% | 1,17 | 63% |
+| Ore 20–24 UTC | 446 | 0,508% | 0,226% | 1,34 | 68% |
 
-Uscite: protezione del guadagno 51%, stop loss 30%, stop che segue 18%, durata massima 0%.
+Uscite: protezione del guadagno 60%, stop loss 29%, stop che segue 11%, durata massima 0%.
 
-**Concentrazione**: le 5 monete migliori fanno 25% del risultato netto delle singole operazioni (ICPUSDT 51 oper., netto medio 1,85%; ESPORTSUSDT 51 oper., netto medio 1,58%; ALGOUSDT 52 oper., netto medio 1,47%; ZECUSDT 50 oper., netto medio 1,49%; FILUSDT 62 oper., netto medio 0,98%). Le 5 peggiori: SOLUSDT -1,08%, CAPUSDT -2,14%, LSKUSDT -0,43%, AVAXUSDT -0,41%, LTCUSDT -0,21%.
+**Concentrazione**: le 5 monete migliori fanno 159% del risultato netto delle singole operazioni (ICPUSDT 51 oper., netto medio 1,36%; ZEREBROUSDT 54 oper., netto medio 0,73%; ALGOUSDT 52 oper., netto medio 0,59%; UAIUSDT 40 oper., netto medio 0,76%; APTUSDT 54 oper., netto medio 0,51%). Le 5 peggiori: SOLUSDT -1,10%, LSKUSDT -0,64%, CAPUSDT -2,45%, DOGEUSDT -0,41%, USUSDT -0,77%.
 
 ## Rischio: da dove vengono i cali
-### Il calo del 41% già visto: versione base "segui, 60 minuti, oltre 8×, tutte le monete" nel 30% (dati già usati)
-- Calo del **40,6%** dal 2026-04-09 al 2026-07-09 (91 giorni, 67 con operazioni chiuse), da 15.943 a 9.470 USDT.
-- 228 operazioni chiuse nel calo, 101 in perdita; la serie più lunga di perdite di fila è di **7**.
-- Il giorno peggiore pesa il **13%** della discesa, i 3 giorni peggiori il **30%**.
+### Il calo del 45% già visto: versione base "segui, 60 minuti, oltre 8×, tutte le monete" nel 30% (dati già usati)
+- Calo del **45,0%** dal 2026-03-10 al 2026-07-27 (139 giorni, 101 con operazioni chiuse), da 16.702 a 9.192 USDT.
+- 326 operazioni chiuse nel calo, 129 in perdita; la serie più lunga di perdite di fila è di **7**.
+- Il giorno peggiore pesa il **11%** della discesa, i 3 giorni peggiori il **26%**.
 
 | Giorno peggiore nel calo | Risultato | Operazioni chiuse | Long / short | Massimo aperte insieme dallo stesso lato |
 |---|---:|---:|---|---:|
@@ -152,47 +203,48 @@ Uscite: protezione del guadagno 51%, stop loss 30%, stop che segue 18%, durata m
 | 2026-04-16 | -454 USDT | 4 | 3 / 1 | 1 long |
 
 ### Regola fissata su A + B (portafoglio, dimensione fissa, leva 3x, slittamento 0,08%)
-- Calo del **14,0%** dal 2020-09-03 al 2020-12-22 (110 giorni, 29 con operazioni chiuse), da 14.854 a 12.773 USDT.
-- 76 operazioni chiuse nel calo, 40 in perdita; la serie più lunga di perdite di fila è di **7**.
-- Il giorno peggiore pesa il **16%** della discesa, i 3 giorni peggiori il **44%**.
+- Calo del **55,8%** dal 2020-09-03 al 2023-10-29 (1.151 giorni, 309 con operazioni chiuse), da 11.818 a 5.226 USDT.
+- 1.088 operazioni chiuse nel calo, 451 in perdita; la serie più lunga di perdite di fila è di **13**.
+- Il giorno peggiore pesa il **16%** della discesa, i 3 giorni peggiori il **40%**.
 
 | Giorno peggiore nel calo | Risultato | Operazioni chiuse | Long / short | Massimo aperte insieme dallo stesso lato |
 |---|---:|---:|---|---:|
-| 2020-11-24 | -333 USDT | 14 | 6 / 8 | 2 short |
-| 2020-11-26 | -313 USDT | 6 | 0 / 6 | 3 short |
-| 2020-11-07 | -264 USDT | 3 | 2 / 1 | 1 long |
-| 2020-11-18 | -257 USDT | 8 | 0 / 8 | 4 short |
-| 2020-12-01 | -200 USDT | 2 | 0 / 2 | 1 short |
+| 2021-05-19 | -1.049 USDT | 10 | 0 / 10 | 5 short |
+| 2022-06-15 | -914 USDT | 10 | 10 / 0 | 7 long |
+| 2021-01-29 | -688 USDT | 4 | 4 / 0 | 1 long |
+| 2022-11-10 | -551 USDT | 4 | 3 / 1 | 1 long |
+| 2023-10-24 | -544 USDT | 13 | 1 / 12 | 10 short |
 
 ### Regola fissata solo su A (2020–2022)
-- Calo del **14,0%** dal 2020-09-03 al 2020-12-22 (110 giorni, 29 con operazioni chiuse), da 14.854 a 12.773 USDT.
-- 76 operazioni chiuse nel calo, 40 in perdita; la serie più lunga di perdite di fila è di **7**.
-- Il giorno peggiore pesa il **16%** della discesa, i 3 giorni peggiori il **44%**.
+- Calo del **51,5%** dal 2020-09-03 al 2022-12-16 (833 giorni, 213 con operazioni chiuse), da 11.818 a 5.737 USDT.
+- 761 operazioni chiuse nel calo, 284 in perdita; la serie più lunga di perdite di fila è di **13**.
+- Il giorno peggiore pesa il **17%** della discesa, i 3 giorni peggiori il **44%**.
 
 | Giorno peggiore nel calo | Risultato | Operazioni chiuse | Long / short | Massimo aperte insieme dallo stesso lato |
 |---|---:|---:|---|---:|
-| 2020-11-24 | -333 USDT | 14 | 6 / 8 | 2 short |
-| 2020-11-26 | -313 USDT | 6 | 0 / 6 | 3 short |
-| 2020-11-07 | -264 USDT | 3 | 2 / 1 | 1 long |
-| 2020-11-18 | -257 USDT | 8 | 0 / 8 | 4 short |
-| 2020-12-01 | -200 USDT | 2 | 0 / 2 | 1 short |
+| 2021-05-19 | -1.049 USDT | 10 | 0 / 10 | 5 short |
+| 2022-06-15 | -914 USDT | 10 | 10 / 0 | 7 long |
+| 2021-01-29 | -688 USDT | 4 | 4 / 0 | 1 long |
+| 2022-11-10 | -551 USDT | 4 | 3 / 1 | 1 long |
+| 2021-02-10 | -439 USDT | 7 | 1 / 6 | 1 short |
 
 ### Regola fissata solo su B (monete 51–100)
-- Calo del **9,5%** dal 2026-03-24 al 2026-06-23 (92 giorni, 63 con operazioni chiuse), da 36.349 a 32.899 USDT.
-- 150 operazioni chiuse nel calo, 56 in perdita; la serie più lunga di perdite di fila è di **7**.
-- Il giorno peggiore pesa il **25%** della discesa, i 3 giorni peggiori il **69%**.
+- Calo del **35,5%** dal 2026-01-19 al 2026-10-10 (264 giorni, 205 con operazioni chiuse), da 18.624 a 12.007 USDT.
+- 597 operazioni chiuse nel calo, 233 in perdita; la serie più lunga di perdite di fila è di **10**.
+- Il giorno peggiore pesa il **17%** della discesa, i 3 giorni peggiori il **43%**.
 
 | Giorno peggiore nel calo | Risultato | Operazioni chiuse | Long / short | Massimo aperte insieme dallo stesso lato |
 |---|---:|---:|---|---:|
+| 2026-02-06 | -1.094 USDT | 20 | 1 / 19 | 10 short |
+| 2026-09-13 | -884 USDT | 4 | 3 / 1 | 1 long |
 | 2026-06-13 | -878 USDT | 2 | 1 / 1 | 1 short |
-| 2026-06-04 | -831 USDT | 15 | 2 / 13 | 2 short |
-| 2026-04-17 | -685 USDT | 3 | 2 / 1 | 0  |
-| 2026-04-10 | -288 USDT | 3 | 2 / 1 | 1 short |
-| 2026-05-14 | -257 USDT | 3 | 2 / 1 | 1 short |
+| 2026-06-04 | -848 USDT | 15 | 2 / 13 | 1 short |
+| 2026-01-31 | -718 USDT | 16 | 1 / 15 | 1 long |
 
-Segnali scartati nel portafoglio A + B: posti pieni 165, freno 0.
+Segnali scartati nel portafoglio A + B: posti pieni 163, freno 15.
 
 ## Limiti
+- **Prezzi veri solo dove servono**: per le operazioni il cui esito non cambia tra i due ordini estremi si usano le candele. Gli aggTrades sono di Binance, non di Bitunix.
 - **Le monete sono scelte con la liquidità di oggi**, anche quelle dei dati nuovi: per A sono le monete che esistono ancora e sono tra le più liquide nel 2026; per B quelle che sono arrivate tra le prime 100. Le monete crollate o tolte dalla quotazione non ci sono. Questo favorisce i risultati, soprattutto i long.
 - Su A le monete sono poche (le più vecchie e grandi), su B sono quasi tutte piccole e recenti: i due gruppi sono diversi dal 70% usato per fissare la regola, ed è proprio questo che serve a verificarla.
 - L'entrata avviene nei primi minuti di un movimento violento: su Bitunix lo slittamento può essere più alto anche dello 0,12%.

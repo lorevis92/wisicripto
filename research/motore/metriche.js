@@ -15,7 +15,7 @@ export function metrichePortafoglio(r, capitale) {
   for (const [, c] of r.curva) { if (c > picco) picco = c; calo = Math.max(calo, (picco - c) / picco); }
   let giornoPeggiore = 0, giornoPeggioreData = null, giorniFrenati = 0;
   for (const [g, x] of r.giorni) {
-    const v = x.pnl / x.inizio;
+    const v = Math.min(x.pnl, x.minimo ?? 0) / x.inizio; // chiuso + aperto, nel momento peggiore del giorno
     if (v < giornoPeggiore) { giornoPeggiore = v; giornoPeggioreData = g; }
     if (x.bloccato) giorniFrenati++;
   }

@@ -9,8 +9,11 @@ export function puntiCandela(o, h, l, c) {
 }
 
 // Come puntiCandela ma scrive in un array già esistente (nei backtest evita milioni di allocazioni)
-export function puntiCandelaIn(out, o, h, l, c) {
+// `modo` (per le prove di sensibilità): 'vicino' = regola di Wisi Trade; 'sfavorevole' / 'favorevole' = l'estremo
+// contrario / a favore della posizione di lato `lato` sempre per primo.
+export function puntiCandelaIn(out, o, h, l, c, lato = 0, modo = 'vicino') {
   out[0] = o; out[3] = c;
-  if (Math.abs(h - o) < Math.abs(l - o)) { out[1] = h; out[2] = l; } else { out[1] = l; out[2] = h; }
+  const altoPrima = modo === 'sfavorevole' ? lato === -1 : modo === 'favorevole' ? lato === 1 : Math.abs(h - o) < Math.abs(l - o);
+  if (altoPrima) { out[1] = h; out[2] = l; } else { out[1] = l; out[2] = h; }
   return out;
 }

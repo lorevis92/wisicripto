@@ -4,6 +4,11 @@
 //   A + B insieme come un unico portafoglio
 // Più l'analisi del rischio: anno per anno, peggior calo, giorni peggiori, posizioni dalla stessa parte,
 // e da dove veniva il calo del 40% della versione base nel 30% (docs/grande-movimento.md).
+// Dopo la revisione indipendente (docs/revisione.md): i minuti in cui l'ordine massimo/minimo cambia l'esito usano i prezzi
+// veri degli scambi (research/10-prezzi-veri.js); per confronto anche la regola delle candele da sola e l'estremo
+// sfavorevole sempre per primo; slittamento per moneta dal book Bitunix; B senza i giorni usati per scegliere le monete.
+//
+// Prima: node --max-old-space-size=12288 research/10-prezzi-veri.js
 //
 // Uso: node --max-old-space-size=12288 research/08-verifica-dati-nuovi.js
 import { isMainThread, parentPort, workerData } from 'node:worker_threads';
@@ -18,18 +23,20 @@ import { rendimentoNetto, nettoOperazione } from './motore/costi.js';
 import { NOMI_MOTIVI } from './motore/posizione.js';
 import {
   MIN, GIORNO, INIZIO, datiComuni, storicoConFermi, operazioniInParallelo, servizioWorker, comeColonne, caricaPrezzi, caricaFunding,
-  eseguiPortafoglio, LEVE, leggiColonne, firma, pct, num, intero, data, rend, calo, rigaMetriche, INTESTAZIONE_METRICHE,
+  eseguiPortafoglio, LEVE, leggiColonne, firma, mediana, pct, num, intero, data, rend, calo, rigaMetriche, INTESTAZIONE_METRICHE,
 } from './lib/backtest.js';
 
 const REGOLA = JSON.parse(readFileSync(join('data', 'backtest', 'regola', 'regola.json'), 'utf8')).regola;
 const VARIANTI = [{ id: 0, N: REGOLA.N, k: REGOLA.k, direzione: REGOLA.direzione, conferma: REGOLA.conferma }];
-const SCHEMA = { variante: Uint8Array, lato: Int8Array, motivo: Uint8Array, entrata: Float64Array, uscita: Float64Array, prezzo: Float64Array, rapporto: Float64Array, funding: Float32Array, peggiore: Float32Array, forza: Float32Array, finestra: Uint8Array };
+const SCHEMA = { modo: Uint8Array, veri: Uint16Array, variante: Uint8Array, lato: Int8Array, motivo: Uint8Array, entrata: Float64Array, uscita: Float64Array, prezzo: Float64Array, rapporto: Float64Array, funding: Float32Array, peggiore: Float32Array, forza: Float32Array, finestra: Uint8Array };
 const PERIODO_A = { da: Date.UTC(2019, 8, 1), a: Date.UTC(2023, 0, 1), conta: Date.UTC(2020, 0, 1) }; // dal 2019-09 solo per il riscaldamento
 const SLITT = [
   { nome: '0,05%', base: 0.0005, piccole: 0.0008 },
   { nome: '0,08%', base: 0.0008, piccole: 0.0008 },
   { nome: '0,12%', base: 0.0012, piccole: 0.0012 },
 ];
+// 0 = prezzi veri dove servono (risultato principale), 1 = solo candele con la regola di Wisi Trade, 2 = estremo sfavorevole sempre per primo
+const MODI = [{ nome: 'prezzi veri', ordine: 'vicino', veri: true }, { nome: 'solo candele (regola Wisi Trade)', ordine: 'vicino', veri: false }, { nome: 'estremo sfavorevole sempre per primo', ordine: 'sfavorevole', veri: false }];
 const vuote = () => comeColonne(SCHEMA, Object.fromEntries(Object.keys(SCHEMA).map(k => [k, []])));
 
 // ---------- Worker: operazioni della regola fissata per una moneta ("A_SIMBOLO" o "B_SIMBOLO") ----------
@@ -40,10 +47,16 @@ if (!isMainThread) servizioWorker(parentPort, chiave => {
   const s = storicoConFermi(simbolo, fermi, { da, a });
   if (!s || s.n < 30 * 1440) return vuote();
   const funding = (leggiFunding(simbolo) || []).filter(x => x[0] >= da && x[0] < a);
-  const o = operazioniGrandeMovimento({ s, funding, varianti: VARIANTI, config: REGOLA.config });
-  const tieni = o.uscita.map((u, i) => (gruppo === 'A' ? o.entrata[i] >= PERIODO_A.conta && u < PERIODO_A.a - MIN : true));
-  for (const k of Object.keys(o)) o[k] = o[k].filter((_, i) => tieni[i]);
-  return comeColonne(SCHEMA, o);
+  const fileVeri = join('data', 'aggtrades', `${simbolo}.json`);
+  const percorsi = existsSync(fileVeri) ? new Map(Object.entries(JSON.parse(readFileSync(fileVeri, 'utf8')).percorsi).map(([t, v]) => [Number(t), v])) : null;
+  const tutte = Object.fromEntries(Object.keys(SCHEMA).map(k => [k, []]));
+  MODI.forEach((m, im) => {
+    const o = operazioniGrandeMovimento({ s, funding, varianti: VARIANTI, config: { ...REGOLA.config, ordine: m.ordine }, percorsi: m.veri ? percorsi : null });
+    o.modo = o.entrata.map(() => im);
+    const tieni = o.uscita.map((u, i) => (gruppo === 'A' ? o.entrata[i] >= PERIODO_A.conta && u < PERIODO_A.a - MIN : true));
+    for (const k of Object.keys(SCHEMA)) tutte[k].push(...o[k].filter((_, i) => tieni[i]));
+  });
+  return comeColonne(SCHEMA, tutte);
 });
 
 // ---------- Analisi del calo più profondo ----------
@@ -93,20 +106,23 @@ async function main() {
   const voci = [...listaA.map(s => ({ chiave: `A_${s}`, simbolo: s, gruppo: 'A' })), ...listaB.map(s => ({ chiave: `B_${s}`, simbolo: s, gruppo: 'B' }))];
   console.log(`A: ${listaA.length} monete 2020–2022 · B: ${listaB.length} monete dal 2023 al ${data(fineB - 1)}`);
   const colonne = await operazioniInParallelo({
-    script: fileURLToPath(import.meta.url), cartella: join('data', 'backtest', 'verifica'), firmaConfig: firma({ REGOLA, PERIODO_A, v: 1 }),
+    script: fileURLToPath(import.meta.url), cartella: join('data', 'backtest', 'verifica'), firmaConfig: firma({ REGOLA, PERIODO_A, MODI, v: 2 }),
     simboli: voci.map(v => v.chiave), datiWorker: { fermi }, rifai: false,
   });
   console.log('Carico i prezzi per il freno...');
-  const contesto = { prezzi: caricaPrezzi(voci.map(v => v.simbolo), { da: PERIODO_A.da }), funding: caricaFunding(voci.map(v => v.simbolo)) };
-  const ops = [];
+  const contesto = { prezzi: caricaPrezzi(voci.map(v => v.simbolo), { da: PERIODO_A.da, fermi }), funding: caricaFunding(voci.map(v => v.simbolo)) };
+  const perModo = MODI.map(() => []);
+  const info = Object.fromEntries(JSON.parse(readFileSync('data/universo.json', 'utf8')).candidati.map(c => [c.simbolo, c]));
   voci.forEach((v, si) => {
     const c = colonne[v.chiave], rango = universo.indexOf(v.simbolo);
-    for (let k = 0; k < c.variante.length; k++) ops.push({
+    for (let k = 0; k < c.variante.length; k++) perModo[c.modo[k]].push({
+      veri: c.veri[k], quotata: info[v.simbolo].quotazioneBinance,
       simbolo: si, nome: v.simbolo, gruppo: v.gruppo, piccola: rango >= 14, lato: c.lato[k], motivo: c.motivo[k], entrata: c.entrata[k], uscita: c.uscita[k],
       prezzo: c.prezzo[k], rapporto: c.rapporto[k], funding: c.funding[k], peggiore: c.peggiore[k], forza: c.forza[k], finestra: c.finestra[k],
     });
   });
-  ops.sort((a, b) => a.entrata - b.entrata || a.simbolo - b.simbolo);
+  for (const l of perModo) l.sort((a, b) => a.entrata - b.entrata || a.simbolo - b.simbolo);
+  const ops = perModo[0];
   const insiemi = { A: ops.filter(o => o.gruppo === 'A'), B: ops.filter(o => o.gruppo === 'B'), 'A + B': ops };
   const lordo = o => o.lato * (o.rapporto - 1);
   const misOp = (lista, s = SLITT[1]) => ({ ...metricheOperazioni(lista.map(o => rendimentoNetto(o.lato, o.rapporto, o.piccola ? Math.max(s.base, s.piccole) : s.base, o.funding))), lordo: lista.length ? lista.reduce((x, o) => x + lordo(o), 0) / lista.length : NaN });
@@ -129,6 +145,29 @@ async function main() {
     { testo: 'con slittamento 0,12% non in perdita', ok: trova('A + B', '0,12%').rendimento >= 0, valore: rend(trova('A + B', '0,12%')) },
   ];
   const verdetto = criteri[0].ok && criteri[1].ok ? (criteri[2].ok && criteri[3].ok ? 'regge' : 'regge in parte') : 'non regge';
+
+  // ---------- Dopo la revisione ----------
+  console.log('Misure della revisione...');
+  const fissa = (lista, extra = {}) => eseguiPortafoglio(lista, { ...base, ...extra }).m;
+  const conVeri = ops.filter(o => o.veri > 0).length;
+  const ordineCandela = MODI.map((m, im) => ({ nome: m.nome, m: fissa(perModo[im]), op: misOp(perModo[im]) }));
+  // slittamento per moneta dal book Bitunix: metà spread + 0,05% × posizione / (profondità entro lo 0,1% dimezzata), almeno lo 0,08%
+  const slittBook = (o, q) => { const c = info[o.nome]; return Math.max(0.0008, c.spreadBps / 20000 + 0.0005 * q / (0.5 * c.profondita01 || 1)); };
+  const daBook = [3, 5].map(leva => {
+    const lista = ops.map(o => ({ ...o, slittamento: Math.min(0.05, slittBook(o, 10000 * 0.1 * leva)) }));
+    return { leva, m: fissa(lista, { leva }), medioSlitt: lista.reduce((x, o) => x + o.slittamento, 0) / lista.length, mediano: mediana(lista.map(o => o.slittamento)) };
+  });
+  const scelta = Date.parse(JSON.parse(readFileSync('data/universo.json', 'utf8')).creato);
+  const finestra = Math.floor((scelta - 30 * GIORNO) / GIORNO) * GIORNO;
+  const sottoB = [
+    ['B, tutto', o => true],
+    [`B senza gli ultimi 30 giorni (dal ${data(finestra)}, usati per scegliere le monete)`, o => o.entrata < finestra],
+    ['B, monete quotate su Binance prima del 2025', o => o.quotata < Date.UTC(2025, 0, 1)],
+    ['B, monete quotate dal 2025', o => o.quotata >= Date.UTC(2025, 0, 1)],
+  ].map(([nome, f]) => { const l = insiemi.B.filter(f); return { nome, monete: new Set(l.map(o => o.nome)).size, m: fissa(l), op: misOp(l) }; });
+  const ABsenza = fissa(ops.filter(o => o.gruppo === 'A' || o.entrata < finestra));
+  const fundingMedio = ops.reduce((x, o) => x + o.funding, 0) / ops.length;
+  const revisione = { totale: ops.length, conVeri, ordineCandela, daBook, sottoB, ABsenza, fundingMedio, finestra, controlloVeri: existsSync('data/aggtrades/controllo.json') ? JSON.parse(readFileSync('data/aggtrades/controllo.json', 'utf8')) : null };
 
   // Anno per anno (ogni anno riparte da 10.000 USDT)
   const anni = [];
@@ -157,14 +196,14 @@ async function main() {
   const calo40 = analizzaCalo40(principali);
 
   mkdirSync(join('data', 'backtest', 'verifica'), { recursive: true });
-  const out = { creato: new Date().toISOString(), regola: REGOLA, listaA, listaB, fineB, risultati, criteri, verdetto, anni, gruppi, monete, motivi, caloAB, caloA, caloB, calo40, scartati: r.scartati };
+  const out = { creato: new Date().toISOString(), regola: REGOLA, listaA, listaB, fineB, fermi, risultati, criteri, verdetto, revisione, anni, gruppi, monete, motivi, caloAB, caloA, caloB, calo40, scartati: r.scartati };
   writeFileSync(join('data', 'backtest', 'verifica', 'risultati.json'), JSON.stringify(out, (k, x) => (x === Infinity ? 'inf' : x), 1));
   scriviDoc(out);
   console.log(`Verdetto: ${verdetto}`);
 }
 
 // Ricostruisce dalla cache di research/06 la versione base "segui, 60 min, 8×, tutte le monete" nel 30% e ne analizza il calo
-function analizzaCalo40({ simboli, taglio, fineDati }) {
+function analizzaCalo40({ simboli, taglio, fineDati, fermi }) {
   const cartella = join('data', 'backtest', 'grande-movimento');
   const dir = readdirSync(cartella).map(d => join(cartella, d)).find(d => existsSync(join(d, 'BTCUSDT.bin')));
   if (!dir) return null;
@@ -176,7 +215,7 @@ function analizzaCalo40({ simboli, taglio, fineDati }) {
     for (let k = 0; k < c.variante.length; k++) if (c.variante[k] === v.id && c.entrata[k] >= taglio) ops.push({ simbolo: si, piccola: si >= 14, lato: c.lato[k], motivo: c.motivo[k], entrata: c.entrata[k], uscita: c.uscita[k], prezzo: c.prezzo[k], rapporto: c.rapporto[k], funding: c.funding[k], peggiore: c.peggiore[k] });
   });
   ops.sort((a, b) => a.entrata - b.entrata || a.simbolo - b.simbolo);
-  const contesto = { prezzi: caricaPrezzi(simboli, { da: taglio - 30 * GIORNO }), funding: caricaFunding(simboli) };
+  const contesto = { prezzi: caricaPrezzi(simboli, { da: taglio - 30 * GIORNO, fermi }), funding: caricaFunding(simboli) };
   const { r, m } = eseguiPortafoglio(ops, { leva: 3, slitt: SLITT[1], composto: false, ordini: 1, tieni: true, contesto });
   return { variante: v, misure: m, ...analizzaCalo(r, 10000) };
 }
@@ -191,6 +230,40 @@ function scriviDoc(out) {
   p(`Aggiornato il ${out.creato.slice(0, 10)}. Regola: \`docs/regola-fissata.md\` (fissata prima di questo test e non cambiata). Script: \`research/08-verifica-dati-nuovi.js\`. Risultati completi: \`data/backtest/verifica/risultati.json\`.`);
   p('');
   p('<!-- conclusione -->');
+  p('');
+  const rv = out.revisione;
+  p('## Dopo la revisione indipendente');
+  p('Una revisione fatta da chi non aveva scritto il codice (`docs/revisione.md`) non ha trovato errori di programmazione. Ha però trovato ipotesi che rendono il risultato migliore del vero. Qui sono corrette o misurate; **la regola è la stessa**.');
+  p('');
+  p(`- **Ordine dentro la candela.** In molte operazioni l'esito dipende da cosa viene toccato prima, il massimo o il minimo del minuto. Per queste operazioni ora si usano i prezzi veri degli scambi di Binance (aggTrades), minuto per minuto dall'entrata alla durata massima: ${intero(rv.conVeri)} operazioni su ${intero(rv.ordineCandela[0].m.operazioni)} prese dal portafoglio (${intero(rv.totale)} segnali)${rv.controlloVeri ? `, ${intero(rv.controlloVeri.minuti)} minuti di prezzi veri, ${intero(rv.controlloVeri.diversi)} minuti scartati perché non coincidevano con la candela` : ''}. Tutti i risultati di questo documento usano i prezzi veri.`);
+  p('- **Portafoglio.** Il peggior calo e il giorno peggiore ora contano anche le perdite aperte, minuto per minuto. Il freno controlla anche le posizioni aperte nello stesso minuto. I fermi di Binance non sono più usati come prezzi validi.');
+  p('');
+  p('**Ordine dentro la candela** (A + B, dimensione fissa, leva 3x, slittamento 0,08%):');
+  p('');
+  p(`| Percorso dentro il minuto | Lordo medio | ${INTESTAZIONE_METRICHE} |`);
+  p('|---|---:|---:|---:|---:|---:|---:|---:|');
+  for (const x of rv.ordineCandela) p(`| ${x.nome} | ${pct(x.op.lordo, 3)} | ${rigaMetriche(x.m)} |`);
+  p('');
+  p('**Slittamento per moneta dal book Bitunix** (A + B, dimensione fissa).');
+  p('- Formula: metà spread + 0,05% × posizione / profondità entro lo 0,1%.');
+  p('- La profondità è dimezzata per i minuti di esplosione; il minimo è 0,08%.');
+  p('- Dettagli in `docs/dimensione-posizione.md`.');
+  p('');
+  p(`| Leva (posizione) | Slittamento medio | Mediano | ${INTESTAZIONE_METRICHE} |`);
+  p('|---|---:|---:|---:|---:|---:|---:|---:|---:|');
+  for (const x of rv.daBook) p(`| ${x.leva}x (${intero(1000 * x.leva)} USDT) | ${pct(x.medioSlitt, 2)} | ${pct(x.mediano, 2)} | ${rigaMetriche(x.m)} |`);
+  p('');
+  p(`**Scelta delle monete di B.** Le monete 51–100 sono state scelte con il volume dei 30 giorni prima del ${data(rv.finestra + 30 * GIORNO)}, che sono dentro il periodo di prova. Molte sono state quotate di recente.`);
+  p('');
+  p(`| Parte di B | Monete | Lordo medio | ${INTESTAZIONE_METRICHE} |`);
+  p('|---|---:|---:|---:|---:|---:|---:|---:|---:|');
+  for (const x of rv.sottoB) p(`| ${x.nome} | ${x.monete} | ${pct(x.op.lordo, 3)} | ${rigaMetriche(x.m)} |`);
+  p('');
+  p(`A + B senza gli ultimi 30 giorni di B: rendimento ${rend(rv.ABsenza)}, profit factor ${num(rv.ABsenza.profitFactor)}, peggior calo ${calo(rv.ABsenza)}.`);
+  p('');
+  p(`**Funding**: in media ${pct(rv.fundingMedio, 4)} del valore della posizione per operazione (positivo = costo). Pesa poco, perché le posizioni durano al massimo 4 ore. È quello di Binance, non di Bitunix.`);
+  p('');
+  p("**Quanto sono nuovi i dati.** L'elenco delle varianti tra cui la regola è stata scelta è stato deciso dopo aver già visto il 30% del periodo 2023–2026. B copre gli stessi mesi con altre monete, e le crypto si muovono insieme. I dati davvero indipendenti sono A (2020–2022) e quello che verrà dopo l'11/11/2026.");
   p('');
   p('## Cosa è stato verificato');
   p(`- **Regola**: solo altcoin; segnale quando il rendimento degli ultimi 15 o 60 minuti supera **${out.regola.k} volte** il movimento normale; si segue il movimento; entrata a mercato al minuto dopo; uscite Wisi Trade (stop 1,5 unità, poi stop che segue 1 unità e protezione 40%), durata massima e pausa 4 ore.`);
@@ -257,6 +330,7 @@ function scriviDoc(out) {
   p(`Segnali scartati nel portafoglio A + B: posti pieni ${intero(out.scartati.posti)}, freno ${intero(out.scartati.freno)}.`);
   p('');
   p('## Limiti');
+  p('- **Prezzi veri solo dove servono**: per le operazioni il cui esito non cambia tra i due ordini estremi si usano le candele. Gli aggTrades sono di Binance, non di Bitunix.');
   p('- **Le monete sono scelte con la liquidità di oggi**, anche quelle dei dati nuovi: per A sono le monete che esistono ancora e sono tra le più liquide nel 2026; per B quelle che sono arrivate tra le prime 100. Le monete crollate o tolte dalla quotazione non ci sono. Questo favorisce i risultati, soprattutto i long.');
   p('- Su A le monete sono poche (le più vecchie e grandi), su B sono quasi tutte piccole e recenti: i due gruppi sono diversi dal 70% usato per fissare la regola, ed è proprio questo che serve a verificarla.');
   p('- L\'entrata avviene nei primi minuti di un movimento violento: su Bitunix lo slittamento può essere più alto anche dello 0,12%.');

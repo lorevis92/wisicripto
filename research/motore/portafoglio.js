@@ -8,7 +8,9 @@
 // Freno giornaliero come in Wisi Trade (shared/engine.js, lossCheck e "freno di mercato"): a ogni minuto, dopo le uscite,
 // perdita del giorno = operazioni chiuse oggi + posizioni aperte valutate alla chiusura del minuto. Se arriva a
 // `freno` × capitale d'inizio giornata, si chiude tutto all'apertura del minuto dopo (con slittamento) e non si apre
-// più nulla fino al giorno UTC successivo.
+// più nulla fino al giorno UTC successivo. Il controllo del minuto t avviene dopo le entrate all'apertura di t.
+// Con i prezzi (o.prezzi) la curva del capitale contiene anche le perdite aperte, minuto per minuto, alla chiusura:
+// peggior calo e giorno peggiore contano chiuso + aperto.
 
 import { nettoOperazione, COMMISSIONE, COMMISSIONE_MAKER } from './costi.js';
 import { MOTIVI } from './posizione.js';
@@ -39,6 +41,7 @@ export function casuale(seme) {
  * @property {number} funding frazione del nozionale pagata fino all'uscita (positivo = costo)
  * @property {number} peggiore massimo movimento contrario (frazione, positivo)
  * @property {boolean} [limite] entrata con ordine limite: commissione maker e nessuno slittamento in entrata
+ * @property {number} [slittamento] slittamento per lato di questa operazione (sostituisce quello generale)
  */
 
 /**
@@ -66,7 +69,7 @@ export function simulaPortafoglio(ops, o) {
 
   const giorno = g => {
     let x = giorni.get(g);
-    if (!x) { x = { inizio: cap, pnl: 0, bloccato: false }; giorni.set(g, x); }
+    if (!x) { x = { inizio: cap, pnl: 0, minimo: 0, bloccato: false }; giorni.set(g, x); }
     return x;
   };
   const giornoDi = t => Math.floor(t / GIORNO) * GIORNO;
@@ -87,7 +90,8 @@ export function simulaPortafoglio(ops, o) {
     netto = Math.max(netto, -1 / leva);
     const pnl = p.nozionale * netto;
     cap += pnl;
-    giorno(giornoUscita(t)).pnl += pnl;
+    const gu = giorno(giornoUscita(t));
+    gu.pnl += pnl; gu.minimo = Math.min(gu.minimo, gu.pnl);
     curva.push([t, cap]);
     prese.push({ ...op, uscita: t, motivo: motivo ?? op.motivo, nozionale: p.nozionale, netto, pnl });
     if (cap <= 0) rovina = true;
@@ -121,9 +125,17 @@ export function simulaPortafoglio(ops, o) {
       const p = aperte[0];
       let t = m + MIN, px = prezzi ? prezzi.apertura(p.op.simbolo, t) : NaN;
       for (let k = 0; k < 60 && Number.isNaN(px); k++) { t += MIN; px = prezzi.apertura(p.op.simbolo, t); }
-      if (Number.isNaN(px)) px = p.op.prezzo * p.op.rapporto;
+      if (Number.isNaN(px)) { px = NaN; for (let k = 0; k < 1440 && Number.isNaN(px); k++) px = prezzi.chiusura(p.op.simbolo, m - k * MIN); } // ultima chiusura nota
+      if (Number.isNaN(px)) px = p.op.prezzo;
       chiudi(0, t, px, MOTIVI.freno);
     }
+  };
+  // capitale con le perdite aperte alla chiusura del minuto m, nella curva e nel minimo del giorno
+  const segna = m => {
+    if (!prezzi || !aperte.length) return;
+    const a = apertoA(m), g = giorno(giornoDi(m));
+    curva.push([m, cap + a]);
+    g.minimo = Math.min(g.minimo, g.pnl + a);
   };
   const usciteFinoA = m => {
     for (;;) {
@@ -139,14 +151,15 @@ export function simulaPortafoglio(ops, o) {
   const avanza = fine => {
     while (ora <= fine && !rovina) {
       if (!aperte.length) { if (Number.isFinite(fine)) ora = Math.max(ora, fine); break; }
-      if (!frenoPossibile(ora)) {
+      if (!prezzi && !frenoPossibile(ora)) {
         let prossima = Math.min(fine, giornoDi(ora) + GIORNO);
         for (const p of aperte) prossima = Math.min(prossima, p.op.uscita);
         if (prossima > ora) { ora = prossima; continue; }
       }
       usciteFinoA(ora);
+      if (ora === fine) break; // freno e curva di questo minuto dopo le entrate
       controllaFreno(ora);
-      if (ora === fine) break;
+      segna(ora);
       ora += MIN;
     }
   };
@@ -167,12 +180,15 @@ export function simulaPortafoglio(ops, o) {
       if (aperte.length >= posti) { scartati.posti++; continue; }
       if (aperte.some(a => a.op.simbolo === op.simbolo)) { scartati.stessaMoneta++; continue; }
       const margine = quota * (composto ? cap : capitale);
-      const s = op.piccola ? slittPiccole : slittamento;
+      const s = op.slittamento ?? (op.piccola ? slittPiccole : slittamento);
       const costi = op.limite
         ? { slittEntrata: 0, slittUscita: s, commEntrata: COMMISSIONE_MAKER, commUscita: COMMISSIONE }
         : { slittEntrata: s, slittUscita: s, commEntrata: COMMISSIONE, commUscita: COMMISSIONE };
       aperte.push({ op, nozionale: margine * leva, costi, fill: op.prezzo * (1 + op.lato * costi.slittEntrata) });
     }
+    controllaFreno(t);
+    segna(t);
+    ora = t + MIN;
     i = j;
   }
   avanza(Infinity);

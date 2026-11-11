@@ -16,6 +16,8 @@
     "btc-eth-limite": "node --max-old-space-size=8192 research/05-btc-eth-limite.js",
     "grande-movimento": "node --max-old-space-size=10240 research/06-grande-movimento.js",
     "fissa-regola": "node --max-old-space-size=8192 research/07-fissa-regola.js",
-    "verifica": "node --max-old-space-size=12288 research/08-verifica-dati-nuovi.js"
+    "prezzi-veri": "node --max-old-space-size=12288 research/10-prezzi-veri.js",
+    "verifica": "node --max-old-space-size=12288 research/08-verifica-dati-nuovi.js",
+    "dimensione": "node --max-old-space-size=12288 research/09-dimensione-posizione.js"
   }
 }

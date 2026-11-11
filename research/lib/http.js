@@ -34,11 +34,11 @@ export async function getJson(url, { limitatore, tentativi = 5 } = {}) {
 }
 
 // Scarica un file binario. null se 404.
-export async function getBuffer(url, { limitatore, tentativi = 5 } = {}) {
+export async function getBuffer(url, { limitatore, tentativi = 5, attesa = 120000 } = {}) {
   for (let t = 1; t <= tentativi; t++) {
     if (limitatore) await limitatore();
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(120000) });
+      const res = await fetch(url, { signal: AbortSignal.timeout(attesa) });
       if (res.status === 404) return null;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return Buffer.from(await res.arrayBuffer());

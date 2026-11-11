@@ -109,9 +109,10 @@ export function servizioWorker(parentPort, simula) {
 export const comeColonne = (schema, dati) => Object.fromEntries(Object.entries(schema).map(([k, T]) => [k, T.from(dati[k])]));
 
 // ---------- Prezzi e funding per il portafoglio (freno con perdita aperta) ----------
-export function caricaPrezzi(simboli, { da = INIZIO, a = Infinity } = {}) {
+// `fermi`: minuti dei fermi di Binance, senza prezzo (come in storicoConFermi)
+export function caricaPrezzi(simboli, { da = INIZIO, a = Infinity, fermi = [] } = {}) {
   const serie = simboli.map(sim => {
-    const s = leggiStorico(sim, { da, a });
+    const s = storicoConFermi(sim, fermi, { da, a });
     return s ? { t0: s.t0, n: s.n, o: Float32Array.from(s.open), c: Float32Array.from(s.close) } : { t0: 0, n: 0 };
   });
   const prendi = (arr, si, t) => { const x = serie[si]; const i = (t - x.t0) / MIN; return i >= 0 && i < x.n ? x[arr][i] : NaN; };

@@ -7,6 +7,8 @@
 // Entrata a mercato all'apertura del minuto dopo. Uscite come Wisi Trade (Posizione, unità = ATR a 15 minuti).
 // Dopo un segnale la moneta non ne apre un altro per `pausa` minuti e comunque non prima che la posizione sia chiusa.
 // Conferme facoltative: trend1h, trend4h, btc, rottura24h, tiene (vedi research/06-grande-movimento.js).
+// Percorso dentro il minuto: config.ordine ('vicino' = regola di Wisi Trade, 'sfavorevole', 'favorevole'; vedi percorso.js).
+// `percorsi` (facoltativo): Map tempo del minuto → prezzi veri degli scambi in ordine (da aggTrades); dove c'è, sostituisce i 4 punti.
 
 import { puntiCandelaIn } from './percorso.js';
 import { Posizione, MOTIVI } from './posizione.js';
@@ -43,7 +45,7 @@ export function movimentoNormale(C, t0, n, N, giorni) {
  * @param {object} p.config { giorniVolatilita, pausa, durataMassima, regole, tieneMinuti, tieneQuota, btcMultiplo }
  * @returns {object} colonne come array: variante, lato, motivo, entrata, uscita, prezzo, rapporto, funding, peggiore, unita, forza, finestra
  */
-export function operazioniGrandeMovimento({ s, btc = null, funding, varianti, config }) {
+export function operazioniGrandeMovimento({ s, btc = null, funding, varianti, config, percorsi = null }) {
   const { open: O, high: H, low: L, close: C, t0, n } = s;
   const c15 = candele15(s);
   const tutteN = [...new Set(varianti.flatMap(v => [].concat(v.N)))];
@@ -84,7 +86,8 @@ export function operazioniGrandeMovimento({ s, btc = null, funding, varianti, co
     }
   };
 
-  const out = { variante: [], lato: [], motivo: [], entrata: [], uscita: [], prezzo: [], rapporto: [], funding: [], peggiore: [], unita: [], forza: [], finestra: [] };
+  const out = { variante: [], lato: [], motivo: [], entrata: [], uscita: [], prezzo: [], rapporto: [], funding: [], peggiore: [], unita: [], forza: [], finestra: [], veri: [] };
+  const ordine = config.ordine ?? 'vicino';
   const punti = new Float64Array(4);
   for (const v of varianti) {
     const finestre = [].concat(v.N), Nmax = Math.max(...finestre);
@@ -117,19 +120,26 @@ export function operazioniGrandeMovimento({ s, btc = null, funding, varianti, co
       const u = c15.atrPrima(tE) / prezzo;
       if (!(u > 0)) continue;
       const pos = new Posizione({ lato, entrata: prezzo, tempo: tE, unita: u, regole: config.regole });
-      pos.minuto(puntiCandelaIn(punti, O[iE], H[iE], L[iE], C[iE]), tE);
+      let veri = 0; // minuti elaborati con i prezzi veri degli scambi
+      const passa = (k, t) => {
+        const vero = percorsi && percorsi.get(t);
+        if (vero) { veri++; pos.salto(O[k], t); pos.minuto(vero, t, -1, O[k]); } // dall'apertura attraverso tutti i prezzi veri
+        else pos.minuto(puntiCandelaIn(punti, O[k], H[k], L[k], C[k], lato, ordine), t);
+      };
+      passa(iE, tE);
       const iFine = iE + config.durataMassima;
       for (let k = iE + 1; k < n && !pos.chiusa; k++) {
         if (Number.isNaN(O[k])) continue;
         const t = t0 + k * MIN;
         if (k >= iFine) { pos.chiudiA(O[k], t, MOTIVI.tempo); break; }
-        pos.minuto(puntiCandelaIn(punti, O[k], H[k], L[k], C[k]), t);
+        passa(k, t);
       }
       if (!pos.chiusa) { let k = n - 1; while (k > 0 && Number.isNaN(C[k])) k--; pos.chiudiA(C[k], t0 + k * MIN, MOTIVI.fineDati); }
+      liberaDa = Math.max(liberaDa, (pos.tempoUscita - t0) / MIN + 1); // con minuti mancanti la posizione può durare di più
       out.variante.push(v.id); out.lato.push(lato); out.motivo.push(pos.motivo);
       out.entrata.push(tE); out.uscita.push(pos.tempoUscita); out.prezzo.push(prezzo); out.rapporto.push(pos.uscita / prezzo);
       out.funding.push(fundingPagato(funding, lato, tE, pos.tempoUscita)); out.peggiore.push(-pos.gPeggiore); out.unita.push(u);
-      out.forza.push(forza); out.finestra.push(Nsc);
+      out.forza.push(forza); out.finestra.push(Nsc); out.veri.push(veri);
     }
   }
   return out;
