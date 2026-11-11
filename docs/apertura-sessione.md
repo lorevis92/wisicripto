@@ -32,6 +32,7 @@ Aggiornato il 2026-11-11 (seconda versione: uscite, unità, percorso nel minuto 
 - **Le aperture in cui molte monete rompono insieme sono le migliori.** Le aperture "a senso unico" rendono in media +1,5% del capitale. Le operazioni lasciate fuori per i 10 posti pieni rendono in media +1,8%, contro lo 0,02% di quelle prese. Con queste regole il limite dei posti taglia proprio i giorni migliori.
 - **BTC ed ETH da sole fanno pochissime operazioni con queste soglie, e nel 30% sono in perdita.** I weekend sono quasi sempre peggio dei giorni feriali.
 - **Il 98% delle posizioni di un'apertura sono dalla stessa parte**: resta una scommessa sola sulla direzione del mercato.
+- **Controllo del motore**: con entrate a caso e le stesse uscite il lordo medio è +0,01/+0,02% (vedi `docs/grande-movimento.md`), quindi i lordi di questo test non sono un effetto delle candele.
 <!-- conclusione:fine -->
 
 ## Le regole
