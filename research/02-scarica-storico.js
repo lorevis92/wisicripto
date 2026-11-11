@@ -15,14 +15,21 @@ import {
 
 const VISION = 'https://data.binance.vision/data/futures/um';
 const BINANCE = 'https://fapi.binance.com/fapi/v1';
-const INIZIO = Date.UTC(2023, 0, 1);
+// Opzioni: --dal=AAAA-MM-GG --al=AAAA-MM-GG (compreso) --monete=51-100 --etichetta=nome
+// Con --etichetta il manifesto e il rapporto dei buchi sono separati (manifesto-nome.json, rapporto-buchi-nome.json)
+// e docs/storico.md non viene riscritto.
+const opzione = nome => (process.argv.find(a => a.startsWith(`--${nome}=`)) || '').split('=')[1];
+const INIZIO = opzione('dal') ? Date.parse(opzione('dal') + 'T00:00:00Z') : Date.UTC(2023, 0, 1);
+const ETICHETTA = opzione('etichetta') || null;
+const INTERVALLO = opzione('monete') ? opzione('monete').split('-').map(Number) : null;
 const MIN = 60000, GIORNO = 86400000;
 const limVision = creaLimitatore(20);
 const limBinance = creaLimitatore(3); // klines da 1500 pesano 10: 3/s = 1800 di peso al minuto, sotto il limite di 2400
-const QUANTI = Number(process.argv[2] || 50);
+const QUANTI = Number(process.argv[2]) || 50;
 
-const OGGI = Math.floor(Date.now() / GIORNO) * GIORNO; // mezzanotte UTC di oggi: si scarica fino a ieri compreso
-const MANIFESTO = join(CARTELLA, 'manifesto.json');
+// fine (esclusa): mezzanotte UTC di oggi, cioè fino a ieri compreso; con --al il giorno dopo la data indicata
+const OGGI = opzione('al') ? Date.parse(opzione('al') + 'T00:00:00Z') + GIORNO : Math.floor(Date.now() / GIORNO) * GIORNO;
+const MANIFESTO = join(CARTELLA, ETICHETTA ? `manifesto-${ETICHETTA}.json` : 'manifesto.json');
 const manifesto = existsSync(MANIFESTO) ? JSON.parse(readFileSync(MANIFESTO, 'utf8')) : {};
 const salvaManifesto = () => writeFileSync(MANIFESTO, JSON.stringify(manifesto, null, 1));
 
@@ -165,6 +172,8 @@ async function scaricaFunding(simbolo, mesi) {
     da = r.at(-1).fundingTime + 1;
     if (r.length < 1000) break;
   }
+  const fileF = join(CARTELLA, 'funding', `${simbolo}.json`);
+  if (existsSync(fileF)) for (const [t, v] of JSON.parse(readFileSync(fileF, 'utf8'))) righe.push([t, v, null]);
   righe.sort((a, b) => a[0] - b[0]);
   const unici = righe.filter((r, i) => i === 0 || r[0] - righe[i - 1][0] > 60000);
   mkdirSync(join(CARTELLA, 'funding'), { recursive: true });
@@ -180,7 +189,7 @@ async function scaricaFunding(simbolo, mesi) {
 
 // Analizza i buchi rileggendo i file binari
 function analizzaBuchi(simbolo) {
-  const s = leggiStorico(simbolo, { da: INIZIO });
+  const s = leggiStorico(simbolo, { da: INIZIO, a: OGGI });
   if (!s) return null;
   let primo = -1, ultimo = -1;
   for (let i = 0; i < s.n; i++) if (!Number.isNaN(s.close[i])) { if (primo < 0) primo = i; ultimo = i; }
@@ -209,7 +218,8 @@ function analizzaBuchi(simbolo) {
 
 async function main() {
   const universo = JSON.parse(readFileSync('data/universo.json', 'utf8'));
-  const lista = universo.candidati.slice(0, QUANTI);
+  const lista = (INTERVALLO ? universo.candidati.slice(INTERVALLO[0] - 1, INTERVALLO[1]) : universo.candidati.slice(0, QUANTI))
+    .filter(c => (c.quotazioneBinance || 0) < OGGI); // le monete quotate dopo la fine del periodo non hanno dati
   mkdirSync(CARTELLA, { recursive: true });
   console.log(`Scarico ${lista.length} simboli fino al ${new Date(OGGI - 1).toISOString().slice(0, 10)} compreso.`);
 
@@ -267,8 +277,8 @@ async function main() {
     delete r.tuttiBuchi; delete r.tuttiFermi;
   }
   const out = { creato: new Date().toISOString(), finoA: OGGI, simboli: lista.map(c => c.simbolo), fermiBorsa: condivisi, rapporto };
-  writeFileSync(join(CARTELLA, 'rapporto-buchi.json'), JSON.stringify(out, null, 1));
-  scriviDoc(out);
+  writeFileSync(join(CARTELLA, ETICHETTA ? `rapporto-buchi-${ETICHETTA}.json` : 'rapporto-buchi.json'), JSON.stringify({ ...out, inizio: INIZIO }, null, 1));
+  if (!ETICHETTA) scriviDoc(out);
   console.log('Fatto: data/binance/ e docs/storico.md');
 }
 
