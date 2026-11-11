@@ -24,8 +24,9 @@ export function datiComuni() {
 }
 
 // Storico di una moneta con i minuti dei fermi di Binance senza prezzo
-export function storicoConFermi(simbolo, fermi) {
-  const s = leggiStorico(simbolo, { da: INIZIO });
+export function storicoConFermi(simbolo, fermi, { da = INIZIO, a = Infinity } = {}) {
+  const s = leggiStorico(simbolo, { da, a });
+  if (!s) return null;
   for (const [t, len] of fermi) for (let k = 0; k < len; k++) {
     const i = (t - s.t0) / MIN + k;
     if (i >= 0 && i < s.n) s.open[i] = s.high[i] = s.low[i] = s.close[i] = NaN;
@@ -108,10 +109,10 @@ export function servizioWorker(parentPort, simula) {
 export const comeColonne = (schema, dati) => Object.fromEntries(Object.entries(schema).map(([k, T]) => [k, T.from(dati[k])]));
 
 // ---------- Prezzi e funding per il portafoglio (freno con perdita aperta) ----------
-export function caricaPrezzi(simboli) {
+export function caricaPrezzi(simboli, { da = INIZIO, a = Infinity } = {}) {
   const serie = simboli.map(sim => {
-    const s = leggiStorico(sim, { da: INIZIO });
-    return { t0: s.t0, n: s.n, o: Float32Array.from(s.open), c: Float32Array.from(s.close) };
+    const s = leggiStorico(sim, { da, a });
+    return s ? { t0: s.t0, n: s.n, o: Float32Array.from(s.open), c: Float32Array.from(s.close) } : { t0: 0, n: 0 };
   });
   const prendi = (arr, si, t) => { const x = serie[si]; const i = (t - x.t0) / MIN; return i >= 0 && i < x.n ? x[arr][i] : NaN; };
   return { apertura: (si, t) => prendi('o', si, t), chiusura: (si, t) => prendi('c', si, t) };

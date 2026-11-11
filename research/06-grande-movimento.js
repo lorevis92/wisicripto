@@ -24,6 +24,7 @@ import { puntiCandelaIn } from './motore/percorso.js';
 import { Posizione, MOTIVI, NOMI_MOTIVI, REGOLE_ATTUALE } from './motore/posizione.js';
 import { fundingPagato, rendimentoNetto } from './motore/costi.js';
 import { candele15 } from './motore/volatilita.js';
+import { operazioniGrandeMovimento } from './motore/grandeMovimento.js';
 import { metricheOperazioni } from './motore/metriche.js';
 import { casuale } from './motore/portafoglio.js';
 import {
@@ -59,117 +60,14 @@ const SCHEMA = {
   entrata: Float64Array, uscita: Float64Array, prezzo: Float64Array, rapporto: Float64Array, funding: Float32Array, peggiore: Float32Array, unita: Float32Array, forza: Float32Array,
 };
 
-// Movimento normale a N minuti, aggiornato una volta al giorno con i 14 giorni precedenti
-function movimentoNormale(C, t0, n, N, giorni) {
-  const g0 = Math.floor(t0 / GIORNO) * GIORNO, nG = Math.ceil((t0 + n * MIN - g0) / GIORNO);
-  const somma = new Float64Array(nG), conta = new Float64Array(nG);
-  for (let i = N; i < n; i++) {
-    const a = C[i], b = C[i - N];
-    if (Number.isNaN(a) || Number.isNaN(b)) continue;
-    const d = Math.floor((t0 + i * MIN - g0) / GIORNO), r = a / b - 1;
-    somma[d] += r * r; conta[d]++;
-  }
-  const sigma = new Float64Array(nG).fill(NaN);
-  for (let d = giorni; d < nG; d++) {
-    let s = 0, c = 0;
-    for (let j = d - giorni; j < d; j++) { s += somma[j]; c += conta[j]; }
-    if (c >= giorni * 1440 * 0.8) sigma[d] = Math.sqrt(s / c);
-  }
-  return i => sigma[Math.floor((t0 + i * MIN - g0) / GIORNO)];
-}
-
 // ---------------------------------------------------------------------------------------------
-// Parte 1: operazioni di una moneta (worker)
+// Parte 1: operazioni di una moneta (worker) — il calcolo è nel motore (research/motore/grandeMovimento.js)
 // ---------------------------------------------------------------------------------------------
 function simulaMoneta(simbolo, fermi) {
   const s = storicoConFermi(simbolo, fermi);
-  const { open: O, high: H, low: L, close: C, t0, n } = s;
-  const c15 = candele15(s);
-  const funding = leggiFunding(simbolo) || [];
-  const sig = Object.fromEntries(CONFIG.finestre.map(N => [N, movimentoNormale(C, t0, n, N, CONFIG.giorniVolatilita)]));
-  // BTC per la conferma "btc": stessa griglia temporale
-  let btc = null;
-  if (simbolo !== 'BTCUSDT') {
-    const b = storicoConFermi('BTCUSDT', fermi);
-    const sh = (t0 - b.t0) / MIN;
-    btc = { C: i => b.close[i + sh], sig: Object.fromEntries(CONFIG.finestre.map(N => { const f = movimentoNormale(b.close, b.t0, b.n, N, CONFIG.giorniVolatilita); return [N, i => f(i + sh)]; })) };
-  }
-  // massimi e minimi delle 24 ore (finestra mobile) per la rottura: calcolati con code monotone
-  const max24 = new Float64Array(n).fill(NaN), min24 = new Float64Array(n).fill(NaN); // max/min di [i-1440, i)
-  {
-    const dqM = [], dqm = [];
-    for (let i = 0; i < n; i++) {
-      while (dqM.length && dqM[0] < i - 1440) dqM.shift();
-      while (dqm.length && dqm[0] < i - 1440) dqm.shift();
-      if (i >= 1440) { if (dqM.length) max24[i] = H[dqM[0]]; if (dqm.length) min24[i] = L[dqm[0]]; }
-      if (!Number.isNaN(H[i])) { while (dqM.length && H[dqM[dqM.length - 1]] <= H[i]) dqM.pop(); dqM.push(i); }
-      if (!Number.isNaN(L[i])) { while (dqm.length && L[dqm[dqm.length - 1]] >= L[i]) dqm.pop(); dqm.push(i); }
-    }
-  }
-  const out = Object.fromEntries(Object.keys(SCHEMA).map(k => [k, []]));
-  const punti = new Float64Array(4);
-  const conferma = (tipo, i, N, dir) => {
-    switch (tipo) {
-      case 'nessuna': return true;
-      case 'trend1h': case 'trend4h': {
-        const L0 = tipo === 'trend1h' ? 60 : 240, a = C[i - N], b = C[i - N - L0];
-        return !Number.isNaN(a) && !Number.isNaN(b) && Math.sign(a - b) === dir;
-      }
-      case 'btc': {
-        if (!btc) return false;
-        const a = btc.C(i), b = btc.C(i - N), sg = btc.sig[N](i);
-        if (Number.isNaN(a) || Number.isNaN(b) || !(sg > 0)) return false;
-        const r = a / b - 1;
-        return Math.sign(r) === dir && Math.abs(r) >= CONFIG.btcMultiplo * sg;
-      }
-      case 'rottura24h': {
-        const j = i - N; if (j < 0) return false;
-        return dir > 0 ? C[i] > max24[j] : C[i] < min24[j];
-      }
-      default: return true; // "tiene" si controlla dopo
-    }
-  };
-
-  for (const v of VARIANTI) {
-    const fSig = sig[v.N];
-    let liberaDa = 0;
-    for (let i = v.N + 241; i < n - 1; i++) {
-      if (i < liberaDa) continue;
-      const a = C[i], b = C[i - v.N];
-      if (Number.isNaN(a) || Number.isNaN(b)) continue;
-      const r = a / b - 1, sg = fSig(i);
-      if (!(sg > 0) || Math.abs(r) < v.k * sg) continue;
-      const dirMov = Math.sign(r);
-      if (!conferma(v.conferma, i, v.N, dirMov)) continue;
-      let iE = i + 1;
-      if (v.conferma === 'tiene') {
-        const j = i + CONFIG.tieneMinuti;
-        if (j >= n - 1 || Number.isNaN(C[j]) || (C[j] - b) / (a - b) < CONFIG.tieneQuota) { continue; }
-        iE = j + 1;
-      }
-      liberaDa = Math.max(i + CONFIG.pausa, iE + CONFIG.durataMassima + 1); // niente sovrapposizioni sulla stessa moneta
-      if (Number.isNaN(O[iE])) continue;
-      const lato = v.direzione === 'segui' ? dirMov : -dirMov;
-      const tE = t0 + iE * MIN, prezzo = O[iE];
-      const u = c15.atrPrima(tE) / prezzo;
-      if (!(u > 0)) continue;
-      const pos = new Posizione({ lato, entrata: prezzo, tempo: tE, unita: u, regole: CONFIG.regole });
-      pos.minuto(puntiCandelaIn(punti, O[iE], H[iE], L[iE], C[iE]), tE);
-      const iFine = iE + CONFIG.durataMassima;
-      for (let k = iE + 1; k < n && !pos.chiusa; k++) {
-        if (Number.isNaN(O[k])) continue;
-        const t = t0 + k * MIN;
-        if (k >= iFine) { pos.chiudiA(O[k], t, MOTIVI.tempo); break; }
-        pos.minuto(puntiCandelaIn(punti, O[k], H[k], L[k], C[k]), t);
-      }
-      if (!pos.chiusa) { let k = n - 1; while (k > 0 && Number.isNaN(C[k])) k--; pos.chiudiA(C[k], t0 + k * MIN, MOTIVI.fineDati); }
-      out.variante.push(v.id); out.lato.push(lato); out.motivo.push(pos.motivo);
-      out.entrata.push(tE); out.uscita.push(pos.tempoUscita); out.prezzo.push(prezzo); out.rapporto.push(pos.uscita / prezzo);
-      out.funding.push(fundingPagato(funding, lato, tE, pos.tempoUscita)); out.peggiore.push(-pos.gPeggiore); out.unita.push(u);
-      out.forza.push(Math.abs(r) / sg);
-    }
-  }
-  return comeColonne(SCHEMA, out);
+  const btc = simbolo !== 'BTCUSDT' ? storicoConFermi('BTCUSDT', fermi) : null;
+  const o = operazioniGrandeMovimento({ s, btc, funding: leggiFunding(simbolo) || [], varianti: VARIANTI, config: CONFIG });
+  return comeColonne(SCHEMA, o);
 }
 
 if (!isMainThread) servizioWorker(parentPort, simbolo => simulaMoneta(simbolo, workerData.fermi));
