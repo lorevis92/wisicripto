@@ -8,3 +8,5 @@ Qui finiscono i risultati della Fase 0, uno per file, in italiano semplice.
 - `apertura-sessione.md` — backtest della prima strategia (con le regole di Wisi Trade)
 - `btc-eth-limite.md` — apertura USA su BTC ed ETH con entrata a ordine limite
 - `grande-movimento.md` — strategia 2: grande movimento in qualsiasi momento, con conferme
+- `regola-fissata.md` — la regola del grande movimento, fissata sul primo 70% prima dei test nuovi
+- `verifica-dati-nuovi.md` — verifica della regola su dati mai usati

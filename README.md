@@ -16,6 +16,8 @@ Strategia di trading automatica sui perpetual crypto di Bitunix. Part of the WiS
 - `npm run apertura` — backtest "apertura di sessione" (motore in `research/motore/`) → `docs/apertura-sessione.md`
 - `npm run btc-eth-limite` — apertura USA su BTC ed ETH con entrata a ordine limite → `docs/btc-eth-limite.md`
 - `npm run grande-movimento` — strategia 2, grande movimento con conferme → `docs/grande-movimento.md`
+- `npm run fissa-regola` — fissa la regola del grande movimento usando solo il primo 70% → `docs/regola-fissata.md`
+- `npm run verifica` — verifica la regola fissata su dati mai usati (2020–2022 e monete 51–100) → `docs/verifica-dati-nuovi.md`
 - `npm run prova-motore` — controlli del motore su casi costruiti a mano
 
 Nessuna dipendenza esterna: basta Node.js 20 o più recente.

@@ -14,6 +14,8 @@
     "apertura": "node --max-old-space-size=8192 research/04-apertura-sessione.js",
     "prova-motore": "node research/motore/prova-motore.js",
     "btc-eth-limite": "node --max-old-space-size=8192 research/05-btc-eth-limite.js",
-    "grande-movimento": "node --max-old-space-size=10240 research/06-grande-movimento.js"
+    "grande-movimento": "node --max-old-space-size=10240 research/06-grande-movimento.js",
+    "fissa-regola": "node --max-old-space-size=8192 research/07-fissa-regola.js",
+    "verifica": "node --max-old-space-size=12288 research/08-verifica-dati-nuovi.js"
   }
 }
