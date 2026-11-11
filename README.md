@@ -9,6 +9,13 @@ Strategia di trading automatica sui perpetual crypto di Bitunix. Part of the WiS
 - `docs/` — risultati della ricerca, in italiano semplice
 - `data/` — dati scaricati (esclusa da git)
 
+## Comandi (Fase 0)
+- `npm run universo` — crypto operabili su Bitunix e presenti su Binance → `docs/universo.md`
+- `npm run storico` — scarica lo storico a 1 minuto e il funding delle prime 50 in `data/binance/` → `docs/storico.md`
+- `npm run confronto` — confronto minuto per minuto Bitunix/Binance delle ultime 3 settimane → `docs/bitunix-vs-binance.md`
+
+Nessuna dipendenza esterna: basta Node.js 20 o più recente.
+
 ## Piano
 1. **Fase 0 · ricerca** — universo delle crypto operabili, storico, backtest "apertura di sessione", poi "grande movimento con conferma".
 2. **Fase 1 · app** — Simulazione e Prova (React + Vite, Vercel, Supabase).

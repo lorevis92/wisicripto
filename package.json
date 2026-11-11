@@ -7,5 +7,9 @@
   "engines": {
     "node": ">=20"
   },
-  "scripts": {}
+  "scripts": {
+    "universo": "node research/01-universo.js",
+    "storico": "node research/02-scarica-storico.js",
+    "confronto": "node research/03-bitunix-vs-binance.js"
+  }
 }
