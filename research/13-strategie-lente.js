@@ -370,6 +370,7 @@ async function main() {
   p('## Limiti');
   p('- I prezzi sono quelli di Binance. Su Bitunix il book è più sottile, e il funding può essere diverso da quello di Binance.');
   p('- Per sapere se una moneta è operabile su Bitunix si usa la lista di oggi. Le monete tolte da Binance di solito non ci sono più nemmeno su Bitunix.');
+  p("- All'inizio del 2020 l'universo aveva poco più di 10 altcoin: le gambe avevano 2–3 monete, e il crollo di marzo 2020 pesa molto sul peggior calo del periodo di scelta.");
   p('- Si provano più famiglie. Anche con la divisione fissata prima, una regola su quattro può passare per caso.');
   scriviConConclusione(join('docs', 'strategie-lente.md'), testo.join('\n') + '\n');
   console.log('Esiti:', JSON.stringify(Object.fromEntries(Object.entries(esiti).map(([k, x]) => [k, x.regge]))));
