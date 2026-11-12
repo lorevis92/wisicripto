@@ -14,3 +14,5 @@ Qui finiscono i risultati della Fase 0, uno per file, in italiano semplice.
 - `dimensione-posizione.md` — posizione rispetto al volume del minuto d'entrata e dimensione massima per moneta
 - `regola-fissata-2.md` — uscita del grande movimento scelta fino al 2023, prima della verifica (nessuna ammessa)
 - `perdite-e-uscite.md` — dove si perde e 13 uscite diverse con i prezzi veri: la strategia grande movimento va abbandonata
+- `regola-fissata-classifica.md` — regole delle strategie lente fissate prima dei risultati, e scelta sul 2020–2023
+- `strategie-lente.md` — classifica settimanale, funding, filtro BTC e rincorsa di BTC: verifica dal 2024

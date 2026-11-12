@@ -20,6 +20,10 @@
     "verifica": "node --max-old-space-size=12288 research/08-verifica-dati-nuovi.js",
     "dimensione": "node --max-old-space-size=12288 research/09-dimensione-posizione.js",
     "uscite-scelta": "node --max-old-space-size=12288 research/11-perdite-e-uscite.js --fase=scelta",
-    "uscite-verifica": "node --max-old-space-size=12288 research/11-perdite-e-uscite.js --fase=verifica"
+    "uscite-verifica": "node --max-old-space-size=12288 research/11-perdite-e-uscite.js --fase=verifica",
+    "scarica-lente": "node --max-old-space-size=8192 research/12-scarica-lente.js",
+    "prova-classifica": "node research/motore/prova-classifica.js",
+    "lente-scelta": "node --max-old-space-size=12288 research/13-strategie-lente.js --fase=scelta",
+    "lente-verifica": "node --max-old-space-size=12288 research/13-strategie-lente.js --fase=verifica"
   }
 }

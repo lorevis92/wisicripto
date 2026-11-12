@@ -22,6 +22,10 @@ Strategia di trading automatica sui perpetual crypto di Bitunix. Part of the WiS
 - `npm run dimensione` — posizione rispetto al volume del minuto d'entrata e dimensione massima per moneta → `docs/dimensione-posizione.md`
 - `npm run uscite-scelta` — sceglie l'uscita del grande movimento sulle operazioni fino al 2023 → `docs/regola-fissata-2.md`
 - `npm run uscite-verifica` — dove si perde e verifica dell'uscita scelta dal 2024 → `docs/perdite-e-uscite.md`
+- `npm run scarica-lente` — candele da 1 ora e funding di tutti i perpetual USDT-M di Binance dal 2020, comprese le monete tolte → `data/lente/`
+- `npm run prova-classifica` — controlli del motore delle strategie lente
+- `npm run lente-scelta` — strategie lente: varianti sul 2020–2023 e scelta di una regola per famiglia → fondo di `docs/regola-fissata-classifica.md`
+- `npm run lente-verifica` — verifica delle regole scelte dal 2024 → `docs/strategie-lente.md`
 - `npm run prova-motore` — controlli del motore su casi costruiti a mano
 
 Nessuna dipendenza esterna: basta Node.js 20 o più recente.
